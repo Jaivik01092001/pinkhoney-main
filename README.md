@@ -24,6 +24,12 @@ The application is designed to help users combat loneliness, find emotional supp
 - **Tailwind CSS** - Utility-first CSS framework for styling
 - **Framer Motion** - Animation library for React
 
+### Backend
+
+- **Node.js** - JavaScript runtime environment
+- **Express.js** - Web application framework for Node.js
+- **Firebase Admin SDK** - Firestore database integration
+
 ### Authentication & User Management
 
 - **Clerk** - Authentication and user management
@@ -32,7 +38,7 @@ The application is designed to help users combat loneliness, find emotional supp
 
 - **Realtime AI** - For voice call functionality
 - **Daily.co** - WebRTC platform for voice calls
-- **Anthropic Claude** - LLM for AI conversations
+- **OpenAI** - GPT-4o model for AI conversations
 
 ### Payment Processing
 
@@ -43,7 +49,6 @@ The application is designed to help users combat loneliness, find emotional supp
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Python 3.8+ (for backend services)
 
 ### Setup Steps
 
@@ -54,14 +59,22 @@ git clone https://github.com/yourusername/pinkhoney.git
 cd pinkhoney
 ```
 
-2. Install dependencies:
+2. Install frontend dependencies:
 
 ```bash
 npm install
 ```
 
-3. Set up environment variables:
-   Create a `.env.local` file in the root directory with the following variables:
+3. Install backend dependencies:
+
+```bash
+cd backend
+npm install
+cd ..
+```
+
+4. Set up environment variables:
+   - Create a `.env.local` file in the root directory for the frontend:
 
 ```
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
@@ -70,17 +83,23 @@ DAILY_BOTS_API_KEY=your_daily_bots_api_key
 DAILY_BOTS_URL=https://api.daily.co/v1/bots
 ```
 
-4. Start the development server:
+- Create a `.env` file in the backend directory:
+
+```
+# Copy from backend/.env.example and fill in your values
+```
+
+5. Start the backend server:
 
 ```bash
+cd backend
 npm run dev
 ```
 
-5. For the backend server (Python):
+6. In a new terminal, start the frontend development server:
 
 ```bash
-pip install -r requirements.txt
-python stripe_server.py
+npm run dev
 ```
 
 ## Available Scripts
@@ -94,10 +113,21 @@ python stripe_server.py
 
 ```
 pinkhoney/
+├── backend/            # Express.js backend
+│   ├── config/         # Configuration files
+│   ├── controllers/    # Request handlers
+│   ├── middleware/     # Express middleware
+│   ├── models/         # Data models
+│   ├── routes/         # API routes
+│   ├── services/       # Business logic
+│   ├── utils/          # Utility functions
+│   ├── .env.example    # Example environment variables
+│   ├── index.js        # Main entry point
+│   └── package.json    # Backend dependencies
 ├── public/             # Static assets and images
-├── src/                # Source code
+├── src/                # Frontend source code
 │   ├── app/            # Next.js app directory
-│   │   ├── api/        # API routes
+│   │   ├── api/        # Next.js API routes
 │   │   ├── components/ # React components
 │   │   ├── all_chats/  # All chats page
 │   │   ├── call/       # Voice call page
@@ -108,7 +138,7 @@ pinkhoney/
 │   │   └── ...         # Other pages
 │   └── middleware.ts   # Next.js middleware
 ├── .next/              # Next.js build output
-├── package.json        # Project dependencies
+├── package.json        # Frontend dependencies
 └── README.md           # Project documentation
 ```
 
@@ -134,11 +164,15 @@ pinkhoney/
 
 ## API Endpoints
 
-### Backend API (Python Server)
+### Backend API (Express.js Server)
 
-- `POST /check_email` - Check user email and subscription status
-- `POST /get_ai_response` - Get AI response for chat messages
-- `GET /create_checkout_session` - Create Stripe checkout session
+- `POST /api/check_email` - Check user email and subscription status
+- `POST /api/get_ai_response` - Get AI response for chat messages
+- `POST /api/change_subscription` - Change user subscription status
+- `POST /api/increase_tokens` - Increase user tokens
+- `GET /api/create_checkout_session` - Create Stripe checkout session
+- `POST /api/webhook` - Handle Stripe webhook events
+- `GET /health` - Server health check
 
 ### Next.js API Routes
 
@@ -146,7 +180,7 @@ pinkhoney/
 
 ## Environment Variables
 
-The following environment variables are required:
+### Frontend (.env.local)
 
 ```
 # Clerk Authentication
@@ -156,10 +190,32 @@ CLERK_SECRET_KEY=your_clerk_secret_key
 # Daily.co Voice API
 DAILY_BOTS_API_KEY=your_daily_bots_api_key
 DAILY_BOTS_URL=https://api.daily.co/v1/bots
+```
 
-# Stripe (for backend)
-STRIPE_SECRET_KEY=your_stripe_secret_key
-STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+### Backend (.env)
+
+```
+# OpenAI API
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=your_stripe_secret_key_here
+STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret_here
+
+# Stripe Price IDs
+STRIPE_DEFAULT_PRICE_ID=price_default_id_here
+STRIPE_LIFETIME_PRICE_ID=price_lifetime_id_here
+STRIPE_YEARLY_PRICE_ID=price_yearly_id_here
+STRIPE_MONTHLY_PRICE_ID=price_monthly_id_here
+
+# Google Cloud
+GOOGLE_APPLICATION_CREDENTIALS=path_to_your_credentials_file.json
+
+# Server Configuration
+PORT=8080
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
 ```
 
 ## Subscription Plans

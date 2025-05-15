@@ -24,7 +24,10 @@ function Chat() {
 
     const newMessage = {
       text: input,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       sender: "user",
     };
     setMessages([...messages, newMessage]);
@@ -32,13 +35,20 @@ function Chat() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8080/get_ai_response", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: input, name: name, personality: personality }),
-      });
+      const response = await fetch(
+        "http://127.0.0.1:8080/api/get_ai_response",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: input,
+            name: name,
+            personality: personality,
+          }),
+        }
+      );
 
       const data = await response.json();
       setLoading(false);
@@ -50,7 +60,10 @@ function Chat() {
 
         const botMessage = {
           text: data.llm_ans[i],
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           sender: "bot",
         };
         setMessages((prevMessages) => [...prevMessages, botMessage]);
@@ -79,7 +92,11 @@ function Chat() {
             <button onClick={go_to_home} className="text-white text-2xl mr-4">
               {/* Back button SVG */}
             </button>
-            <img src={image} alt="User profile" className="w-12 h-12 rounded-full mr-4" />
+            <img
+              src={image}
+              alt="User profile"
+              className="w-12 h-12 rounded-full mr-4"
+            />
             <div>
               <div className="text-white font-bold text-lg">{name}</div>
               <div className="text-green-500 text-sm">Online</div>
@@ -92,11 +109,22 @@ function Chat() {
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4">
             {messages.map((message, index) => (
-              <div key={index} className={`flex ${message.sender === "user" ? "justify-end" : ""} mb-4`}>
-                <div className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"} text-white p-3 rounded-lg max-w-xs`}>
+              <div
+                key={index}
+                className={`flex ${
+                  message.sender === "user" ? "justify-end" : ""
+                } mb-4`}
+              >
+                <div
+                  className={`${
+                    message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
+                  } text-white p-3 rounded-lg max-w-xs`}
+                >
                   {message.text}
                 </div>
-                <div className="text-gray-500 text-xs ml-2 self-end">{message.time}</div>
+                <div className="text-gray-500 text-xs ml-2 self-end">
+                  {message.time}
+                </div>
               </div>
             ))}
 
@@ -132,7 +160,10 @@ function Chat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
             />
-            <button className="text-green-500 text-2xl" onClick={handleSendMessage}>
+            <button
+              className="text-green-500 text-2xl"
+              onClick={handleSendMessage}
+            >
               <FaPaperPlane />
             </button>
           </div>
