@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { FaPaperPlane } from "react-icons/fa";
 import { useRouter } from "next/navigation";
@@ -46,6 +46,8 @@ function Chat() {
             message: input,
             name: name,
             personality: personality,
+            user_id: user_id, // Include user_id for chat history storage
+            image: image, // Include image for chat history storage
           }),
         }
       );
@@ -83,6 +85,30 @@ function Chat() {
   function go_to_home() {
     router.push(`/home?user_id=${user_id}&email=${email}`);
   }
+
+  // Load chat history when component mounts
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!user_id || !name) return;
+
+      try {
+        const response = await fetch(
+          `http://127.0.0.1:8080/api/get_chat_history?user_id=${user_id}&companion_name=${name}`
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    };
+
+    loadChatHistory();
+  }, [user_id, name]);
 
   return (
     <>

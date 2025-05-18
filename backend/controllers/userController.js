@@ -6,7 +6,7 @@ const {
   createUser,
   updateUser,
   getUserById,
-} = require("../services/firestoreService");
+} = require("../services/mongoService");
 
 /**
  * Check if a user exists by email, create if not exists
@@ -19,7 +19,7 @@ const checkEmail = async (req, res, next) => {
     console.log("Request body:", req.body);
     console.log("Request headers:", req.headers);
 
-    const { email } = req.body;
+    const { email, clerkId, firstName, lastName } = req.body;
 
     if (!email) {
       return res.status(400).json({
@@ -32,8 +32,23 @@ const checkEmail = async (req, res, next) => {
     let user = await getUserByEmail(email);
 
     if (user) {
-      // User exists, return user data
-      console.log("Email exists in Firestore");
+      // User exists, update with Clerk ID if provided and not already set
+      console.log("Email exists in MongoDB");
+
+      // If clerkId is provided and user doesn't have one yet, update it
+      if (clerkId && !user.clerkId) {
+        const updateData = { clerkId };
+
+        // Also update name if provided
+        if (firstName) updateData.firstName = firstName;
+        if (lastName) updateData.lastName = lastName;
+
+        await updateUser(user.user_id, updateData);
+
+        // Get updated user
+        user = await getUserByEmail(email);
+      }
+
       return res.status(200).json({
         user_id: user.user_id,
         tokens: user.tokens,
@@ -41,7 +56,7 @@ const checkEmail = async (req, res, next) => {
       });
     } else {
       // User doesn't exist, create new user
-      console.log("Email does not exist in Firestore");
+      console.log("Email does not exist in MongoDB");
 
       // Generate random user ID
       const userId = Math.floor(Math.random() * 900000000) + 100000000;
@@ -52,6 +67,9 @@ const checkEmail = async (req, res, next) => {
         email,
         tokens: "0",
         subscribed: "no",
+        clerkId: clerkId || null,
+        firstName: firstName || null,
+        lastName: lastName || null,
       };
 
       await createUser(newUser);
@@ -88,7 +106,7 @@ const changeSubscription = async (req, res, next) => {
     const user = await getUserById(user_id);
 
     if (!user) {
-      console.log("User does not exist in Firestore");
+      console.log("User does not exist in MongoDB");
       return res.status(404).json({
         status: "failure",
         error: "User not found",
@@ -96,7 +114,7 @@ const changeSubscription = async (req, res, next) => {
     }
 
     // Update user subscription
-    console.log("User exists in Firestore");
+    console.log("User exists in MongoDB");
     await updateUser(user.id, { subscribed: selected_plan });
 
     return res.status(200).json({
@@ -128,7 +146,7 @@ const increaseTokens = async (req, res, next) => {
     const user = await getUserById(user_id);
 
     if (!user) {
-      console.log("User does not exist in Firestore");
+      console.log("User does not exist in MongoDB");
       return res.status(404).json({
         status: "failure",
         error: "User not found",
@@ -136,7 +154,7 @@ const increaseTokens = async (req, res, next) => {
     }
 
     // Update user tokens
-    console.log("User exists in Firestore");
+    console.log("User exists in MongoDB");
     const currentTokens = parseInt(user.tokens) || 0;
     const newTokens = currentTokens + parseInt(tokens_to_increase);
 

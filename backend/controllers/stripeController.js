@@ -1,7 +1,10 @@
 /**
  * Stripe payment controller
  */
-const { createCheckoutSession, handleWebhookEvent } = require('../services/stripeService');
+const {
+  createCheckoutSession,
+  handleWebhookEvent,
+} = require("../services/stripeService");
 
 /**
  * Create a checkout session for subscription
@@ -12,24 +15,25 @@ const { createCheckoutSession, handleWebhookEvent } = require('../services/strip
 const createCheckoutSessionHandler = async (req, res, next) => {
   try {
     const { user_id, selected_plan, email } = req.query;
-    
+
     if (!user_id) {
       return res.status(400).json({
         success: false,
-        error: 'User ID is required'
+        error: "User ID is required",
       });
     }
-    
-    // Create checkout session
+
+    // Create checkout session with required information
     const session = await createCheckoutSession({
       userId: user_id,
-      email: email || '',
-      plan: selected_plan || 'monthly'
+      email: email || "",
+      plan: selected_plan || "monthly",
     });
-    
+
     // Redirect to checkout URL
     res.redirect(303, session.url);
   } catch (error) {
+    console.error("Error creating checkout session:", error);
     next(error);
   }
 };
@@ -42,30 +46,30 @@ const createCheckoutSessionHandler = async (req, res, next) => {
  */
 const webhookHandler = async (req, res, next) => {
   try {
-    const signature = req.headers['stripe-signature'];
-    
+    const signature = req.headers["stripe-signature"];
+
     if (!signature) {
       return res.status(400).json({
         success: false,
-        error: 'Missing Stripe signature'
+        error: "Missing Stripe signature",
       });
     }
-    
+
     // Process the webhook event
     await handleWebhookEvent(req.rawBody, signature);
-    
+
     // Return success response
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error('Webhook error:', error.message);
+    console.error("Webhook error:", error.message);
     return res.status(400).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 };
 
 module.exports = {
   createCheckoutSessionHandler,
-  webhookHandler
+  webhookHandler,
 };

@@ -15,20 +15,23 @@ This backend provides API endpoints for the Pink Honey frontend, handling:
 
 - **Node.js** - JavaScript runtime
 - **Express.js** - Web framework
-- **Firebase Admin SDK** - Firestore database integration
+- **MongoDB** - NoSQL database for data storage
+- **Mongoose** - MongoDB object modeling for Node.js
 - **OpenAI API** - AI conversation generation
 - **Stripe API** - Payment processing
-- **Daily.co API** - Voice call functionality
+- **Cartesia API** - Voice call functionality
+- **Clerk** - Authentication and user management
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Firebase project with Firestore database
+- MongoDB database (local or Atlas)
 - OpenAI API key
 - Stripe account and API keys
-- Daily.co account and API key
+- Cartesia account and API key
+- Clerk account for authentication
 
 ### Installation
 
@@ -59,6 +62,7 @@ npm run dev
 ### AI Responses
 
 - `POST /api/get_ai_response` - Get AI response for chat messages
+- `GET /api/get_chat_history` - Get chat history for a user and companion
 
 ### User Management
 
@@ -70,6 +74,14 @@ npm run dev
 
 - `GET /api/create_checkout_session` - Create Stripe checkout session
 - `POST /api/webhook` - Handle Stripe webhook events
+
+### Authentication
+
+- `POST /api/clerk-webhook` - Handle Clerk authentication webhook events
+
+### System
+
+- `GET /health` - Server health check
 
 ## Environment Variables
 
@@ -90,18 +102,51 @@ STRIPE_LIFETIME_PRICE_ID=price_lifetime_id_here
 STRIPE_YEARLY_PRICE_ID=price_yearly_id_here
 STRIPE_MONTHLY_PRICE_ID=price_monthly_id_here
 
-# Daily.co Voice API
-DAILY_BOTS_API_KEY=your_daily_bots_api_key_here
-DAILY_BOTS_URL=https://api.daily.co/v1/bots
+# Cartesia Voice API
+CARTESIA_API_KEY=your_cartesia_api_key_here
+CARTESIA_URL=https://api.cartesia.ai
 
-# Google Cloud
-GOOGLE_APPLICATION_CREDENTIALS=path_to_your_credentials_file.json
+# MongoDB Configuration
+MONGODB_URI=mongodb://localhost:27017/pinkhoney
+
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key_here
+CLERK_SECRET_KEY=your_clerk_secret_key_here
+CLERK_WEBHOOK_SECRET=your_clerk_webhook_secret_here
 
 # Server Configuration
 PORT=8080
 NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
 ```
+
+## MongoDB Integration
+
+Pink Honey uses MongoDB for data storage with the following collections:
+
+- **users**: Stores user information, including authentication details and subscription status
+- **chat_history**: Stores conversation history between users and AI companions
+- **companions**: Stores AI companion profiles and personalities
+- **payments**: Stores payment records and subscription details
+
+The application uses Mongoose for object modeling and database interactions. When users sign up with Clerk authentication, corresponding user entries are automatically created in MongoDB.
+
+## Stripe Integration
+
+The application uses Stripe for payment processing with the following features:
+
+- Secure checkout sessions for subscription payments
+- Webhook handling for payment events
+- Billing address collection for compliance with Indian regulations
+- Automatic subscription management
+
+## API Testing with Postman
+
+A Postman collection is included in the repository for testing the API endpoints. To use it:
+
+1. Import the `Pink_Honey_API.postman_collection.json` file into Postman
+2. Set up an environment with the `baseUrl` variable pointing to your backend server (default: `http://localhost:8080`)
+3. Use the collection to test the various API endpoints
 
 ## Docker
 

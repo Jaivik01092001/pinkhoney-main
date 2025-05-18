@@ -1,8 +1,11 @@
 /**
  * AI response routes
  */
-const express = require('express');
-const { getAIResponseHandler } = require('../controllers/aiController');
+const express = require("express");
+const {
+  getAIResponseHandler,
+  getChatHistoryHandler,
+} = require("../controllers/aiController");
 
 const router = express.Router();
 
@@ -11,6 +14,13 @@ const router = express.Router();
  * @desc    Get AI response for user message
  * @access  Public
  */
-router.post('/get_ai_response', getAIResponseHandler);
+router.post("/get_ai_response", getAIResponseHandler);
+
+/**
+ * @route   GET /api/get_chat_history
+ * @desc    Get chat history for a user and companion
+ * @access  Public
+ */
+router.get("/get_chat_history", getChatHistoryHandler);
 
 module.exports = router;

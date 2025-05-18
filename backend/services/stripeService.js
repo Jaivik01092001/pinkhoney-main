@@ -1,8 +1,14 @@
 /**
  * Stripe payment service
  */
-const stripe = require('stripe');
-const config = require('../config/config');
+const stripe = require("stripe");
+const config = require("../config/config");
+const {
+  createPayment,
+  updatePayment,
+  updateUser,
+  getUserById,
+} = require("./mongoService");
 
 // Initialize Stripe client
 const stripeClient = stripe(config.stripe.secretKey);
@@ -19,32 +25,55 @@ const createCheckoutSession = async ({ userId, email, plan }) => {
   try {
     // Determine price ID based on selected plan
     let priceId = config.stripe.priceIds.default;
-    
-    if (plan === 'lifetime') {
+    if (plan === "lifetime") {
       priceId = config.stripe.priceIds.lifetime;
-    } else if (plan === 'yearly') {
+    } else if (plan === "yearly") {
       priceId = config.stripe.priceIds.yearly;
-    } else if (plan === 'monthly') {
+    } else if (plan === "monthly") {
       priceId = config.stripe.priceIds.monthly;
     }
-    
-    // Create checkout session
-    const session = await stripeClient.checkout.sessions.create({
+
+    // Determine mode: 'payment' for lifetime (one-time), 'subscription' otherwise
+    const isSubscription = plan === "monthly" || plan === "yearly";
+    const mode = isSubscription ? "subscription" : "payment";
+
+    // Build session payload
+    const sessionPayload = {
       line_items: [
         {
           price: priceId,
           quantity: 1,
         },
       ],
-      mode: 'subscription',
+      mode,
       success_url: `${config.server.frontendUrl}/subscribed?user_id=${userId}&selected_plan=${plan}&email=${email}`,
       customer_email: email,
-      // automatic_tax: { enabled: true },
+      billing_address_collection: "required",
+      payment_method_types: ["card"],
+    };
+
+    // ✅ Only add customer_creation for one-time (payment) mode
+    if (mode === "payment") {
+      sessionPayload.customer_creation = "always";
+    }
+
+    // Create checkout session
+    const session = await stripeClient.checkout.sessions.create(sessionPayload);
+
+    // Save payment record
+    await createPayment({
+      user_id: userId,
+      email,
+      amount: plan === "lifetime" ? 9999 : plan === "yearly" ? 9999 : 1999,
+      currency: "usd",
+      status: "pending",
+      stripeSessionId: session.id,
+      subscriptionPlan: plan,
     });
-    
+
     return session;
   } catch (error) {
-    console.error('Error creating checkout session:', error);
+    console.error("Error creating checkout session:", error);
     throw error;
   }
 };
@@ -63,40 +92,82 @@ const handleWebhookEvent = async (payload, signature) => {
       signature,
       config.stripe.webhookSecret
     );
-    
+
     // Handle different event types
     switch (event.type) {
-      case 'checkout.session.completed':
+      case "checkout.session.completed":
         // Payment is successful, update user subscription status
         const session = event.data.object;
-        // Process the session
-        console.log('Checkout session completed:', session.id);
+
+        // Update payment record
+        await updatePayment(session.id, {
+          status: "completed",
+          stripeCustomerId: session.customer,
+          stripePaymentIntentId: session.payment_intent,
+        });
+
+        // Get the payment record to find the user and plan
+        const payment = await updatePayment(session.id, {});
+        if (payment) {
+          // Update user subscription status
+          const user = await getUserById(payment.user_id);
+          if (user) {
+            const subscriptionData = {
+              subscribed: "yes",
+              subscription: {
+                plan: payment.subscriptionPlan,
+                startDate: new Date(),
+                endDate:
+                  payment.subscriptionPlan === "lifetime"
+                    ? null
+                    : payment.subscriptionPlan === "yearly"
+                    ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                status: "active",
+                stripeCustomerId: session.customer,
+                stripeSubscriptionId: session.subscription,
+              },
+            };
+
+            await updateUser(user.user_id, subscriptionData);
+          }
+        }
+
+        console.log("Checkout session completed:", session.id);
         break;
-        
-      case 'invoice.payment_succeeded':
+
+      case "invoice.payment_succeeded":
         // Subscription invoice paid
         const invoice = event.data.object;
-        console.log('Invoice payment succeeded:', invoice.id);
+
+        // Find user by Stripe customer ID and update subscription
+        // This would require additional lookup functionality
+
+        console.log("Invoice payment succeeded:", invoice.id);
         break;
-        
-      case 'customer.subscription.deleted':
+
+      case "customer.subscription.deleted":
         // Subscription canceled or expired
         const subscription = event.data.object;
-        console.log('Subscription deleted:', subscription.id);
+
+        // Find user by Stripe subscription ID and update status
+        // This would require additional lookup functionality
+
+        console.log("Subscription deleted:", subscription.id);
         break;
-        
+
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
-    
+
     return event;
   } catch (error) {
-    console.error('Error handling webhook event:', error);
+    console.error("Error handling webhook event:", error);
     throw error;
   }
 };
 
 module.exports = {
   createCheckoutSession,
-  handleWebhookEvent
+  handleWebhookEvent,
 };

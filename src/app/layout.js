@@ -5,8 +5,9 @@ import {
   SignInButton,
   SignedIn,
   SignedOut,
-  UserButton
-} from '@clerk/nextjs'
+  UserButton,
+} from "@clerk/nextjs";
+import ClerkAuthSync from "./components/ClerkAuthSync";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,6 +26,7 @@ export default function RootLayout({ children }) {
           </SignedOut>
           <SignedIn>
             <UserButton />
+            <ClerkAuthSync />
           </SignedIn>
           {children}
         </body>
