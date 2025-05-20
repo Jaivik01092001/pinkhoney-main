@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { FaPaperPlane } from "react-icons/fa";
+import { FaPaperPlane, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
 import { useRouter } from "next/navigation";
+import AudioPlayer from "../../components/AudioPlayer";
 
 function Chat() {
   const router = useRouter();
@@ -18,19 +19,40 @@ function Chat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false); // State for delay effect
+  const [isPlayingResponse, setIsPlayingResponse] = useState(false);
+  const [audioResponse, setAudioResponse] = useState(null);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const audioPlayerRef = useRef(null);
 
   const handleSendMessage = async () => {
-    if (input.trim() === "") return;
+    // Use the processMessage function to handle the input
+    if (input.trim() !== "") {
+      await processMessage(input);
+    }
+  };
+
+  function handle_call() {
+    router.push(`/call?name=${name}&personality=${personality}&image=${image}`);
+  }
+
+  function go_to_home() {
+    router.push(`/home?user_id=${user_id}&email=${email}`);
+  }
+
+  // Process a message
+  const processMessage = async (messageText) => {
+    if (!messageText || messageText.trim() === "") return;
 
     const newMessage = {
-      text: input,
+      text: messageText,
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
       sender: "user",
     };
-    setMessages([...messages, newMessage]);
+
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
     setInput("");
     setLoading(true);
 
@@ -43,11 +65,11 @@ function Chat() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: input,
+            message: messageText,
             name: name,
             personality: personality,
-            user_id: user_id, // Include user_id for chat history storage
-            image: image, // Include image for chat history storage
+            user_id: user_id,
+            image: image,
           }),
         }
       );
@@ -56,9 +78,9 @@ function Chat() {
       setLoading(false);
 
       for (let i = 0; i < data.llm_ans.length; i++) {
-        setWaitingForNext(true); // Show "..." while waiting for the next message
+        setWaitingForNext(true);
 
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2-second delay
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         const botMessage = {
           text: data.llm_ans[i],
@@ -68,8 +90,14 @@ function Chat() {
           }),
           sender: "bot",
         };
+
         setMessages((prevMessages) => [...prevMessages, botMessage]);
-        setWaitingForNext(false); // Hide "..." after message appears
+        setWaitingForNext(false);
+
+        // If voice is enabled, convert the response to speech
+        if (voiceEnabled) {
+          await generateSpeechForText(data.llm_ans[i]);
+        }
       }
     } catch (error) {
       console.error("Error:", error);
@@ -78,13 +106,46 @@ function Chat() {
     }
   };
 
-  function handle_call() {
-    router.push(`/call?name=${name}&personality=${personality}&image=${image}`);
-  }
+  // Generate speech for a text response
+  const generateSpeechForText = async (text) => {
+    try {
+      setIsPlayingResponse(true);
 
-  function go_to_home() {
-    router.push(`/home?user_id=${user_id}&email=${email}`);
-  }
+      // Call the TTS API
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          voiceId: "bf0a246a-8642-498a-9950-80c35e9276b5", // Default voice ID
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`TTS API error: ${response.status}`);
+      }
+
+      // Get the audio data as ArrayBuffer
+      const audioData = await response.arrayBuffer();
+      setAudioResponse(audioData);
+    } catch (error) {
+      console.error("Error generating speech:", error);
+      setIsPlayingResponse(false);
+    }
+  };
+
+  // Handle audio playback completion
+  const handlePlaybackComplete = () => {
+    setIsPlayingResponse(false);
+    setAudioResponse(null);
+  };
+
+  // Toggle voice mode
+  const toggleVoiceMode = () => {
+    setVoiceEnabled(!voiceEnabled);
+  };
 
   // Load chat history when component mounts
   useEffect(() => {
@@ -176,6 +237,16 @@ function Chat() {
             )}
           </div>
 
+          {/* Audio Player (hidden but functional) */}
+          {audioResponse && (
+            <AudioPlayer
+              ref={audioPlayerRef}
+              audioData={audioResponse}
+              autoPlay={true}
+              onPlaybackComplete={handlePlaybackComplete}
+            />
+          )}
+
           {/* Input Field */}
           <div className="bg-black p-4 flex items-center sticky bottom-14">
             <input
@@ -184,13 +255,31 @@ function Chat() {
               className="flex-grow bg-gray-800 text-white p-3 rounded-lg mr-4"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             />
+
+            {/* Send Button */}
             <button
-              className="text-green-500 text-2xl"
+              className="text-green-500 text-2xl mr-2"
               onClick={handleSendMessage}
+              disabled={input.trim() === ""}
             >
               <FaPaperPlane />
+            </button>
+
+            {/* Voice Toggle Button */}
+            <button
+              className={`p-2 rounded-full mr-2 ${
+                voiceEnabled ? "bg-pink-500" : "bg-gray-700"
+              } text-white`}
+              onClick={toggleVoiceMode}
+              title={
+                voiceEnabled
+                  ? "Disable voice responses"
+                  : "Enable voice responses"
+              }
+            >
+              {voiceEnabled ? <FaVolumeUp /> : <FaVolumeMute />}
             </button>
           </div>
         </div>

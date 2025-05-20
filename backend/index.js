@@ -12,6 +12,7 @@ const aiRoutes = require("./routes/aiRoutes");
 const userRoutes = require("./routes/userRoutes");
 const stripeRoutes = require("./routes/stripeRoutes");
 const clerkRoutes = require("./routes/clerkRoutes");
+const cartesiaRoutes = require("./routes/cartesiaRoutes");
 
 // Connect to MongoDB
 connectDB();
@@ -38,6 +39,7 @@ app.use("/api", aiRoutes);
 app.use("/api", userRoutes);
 app.use("/api", stripeRoutes);
 app.use("/api", clerkRoutes);
+app.use("/api/cartesia", cartesiaRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
