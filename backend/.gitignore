@@ -32,7 +32,7 @@ Thumbs.db
 # API keys and credentials
 *.json
 !package.json
-!package-lock.json
+package-lock.json
 
 # Temporary files
 tmp/

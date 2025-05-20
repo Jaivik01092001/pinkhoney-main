@@ -13,34 +13,67 @@ export default function Home() {
 
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
+  const urlUserId = searchParams.get("user_id");
 
   async function check_email(email) {
-    const formData = new FormData();
-    formData.append("email", email);
-    console.log("email request sent");
-    const response = await fetch("http://127.0.0.1:8080/api/check_email", {
-      method: "POST",
-      body: formData,
-    });
+    // If we already have a user_id from URL, use it
+    if (urlUserId) {
+      console.log("Using user_id from URL:", urlUserId);
+      set_user_id(urlUserId);
 
-    const jsonData = await response.json(); // Parse JSON response
-    console.log(jsonData);
-    const user_id = jsonData["user_id"];
-    const tokens = jsonData["tokens"];
-    const subscribed = jsonData["subscribed"];
-    if (subscribed == "no") {
-      router.push(`/pricing?user_id=${user_id}&email=${email}`);
+      // Still need to get tokens and subscription status
+      console.log("email request sent");
+      const response = await fetch("http://127.0.0.1:8080/api/check_email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const jsonData = await response.json(); // Parse JSON response
+      console.log(jsonData);
+      const tokens = jsonData["tokens"];
+      const subscribed = jsonData["subscribed"];
+      // Don't automatically redirect to pricing
+      // if (subscribed == "no") {
+      //   router.push(`/pricing?user_id=${urlUserId}&email=${email}`);
+      // }
+      set_tokens(tokens);
+      set_subscribed(subscribed);
+    } else {
+      // No user_id in URL, need to get everything from API
+      console.log("email request sent");
+      const response = await fetch("http://127.0.0.1:8080/api/check_email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const jsonData = await response.json(); // Parse JSON response
+      console.log(jsonData);
+      const user_id = jsonData["user_id"];
+      const tokens = jsonData["tokens"];
+      const subscribed = jsonData["subscribed"];
+      // Don't automatically redirect to pricing
+      // if (subscribed == "no") {
+      //   router.push(`/pricing?user_id=${user_id}&email=${email}`);
+      // }
+      set_user_id(user_id);
+      set_tokens(tokens);
+      set_subscribed(subscribed);
     }
-    set_user_id(user_id);
-    set_tokens(tokens);
-    set_subscribed(subscribed);
   }
 
-  useEffect(() => {
-    check_email(email);
-  }, []); // Ensure this runs only once on component mount
-
   const router = useRouter();
+
+  useEffect(() => {
+    if (email) {
+      check_email(email);
+    }
+  }, [email, urlUserId, router]); // Run when email, urlUserId, or router changes
 
   const [profiles, set_original_profiles] = useState([
     {
