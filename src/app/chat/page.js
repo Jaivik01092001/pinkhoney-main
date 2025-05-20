@@ -266,21 +266,6 @@ function Chat() {
             >
               <FaPaperPlane />
             </button>
-
-            {/* Voice Toggle Button */}
-            <button
-              className={`p-2 rounded-full mr-2 ${
-                voiceEnabled ? "bg-pink-500" : "bg-gray-700"
-              } text-white`}
-              onClick={toggleVoiceMode}
-              title={
-                voiceEnabled
-                  ? "Disable voice responses"
-                  : "Enable voice responses"
-              }
-            >
-              {voiceEnabled ? <FaVolumeUp /> : <FaVolumeMute />}
-            </button>
           </div>
         </div>
       </div>
