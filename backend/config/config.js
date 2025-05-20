@@ -36,14 +36,6 @@ module.exports = {
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
 
-  // Cartesia Voice API configuration
-  cartesia: {
-    apiKey: process.env.CARTESIA_API_KEY,
-    url: process.env.CARTESIA_URL || "https://api.cartesia.ai",
-    version: "2024-06-10",
-    endpoint: "/tts/bytes",
-  },
-
   // MongoDB configuration
   mongodb: {
     uri: process.env.MONGODB_URI || "mongodb://localhost:27017/pinkhoney",

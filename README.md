@@ -38,7 +38,7 @@ The application is designed to help users combat loneliness, find emotional supp
 ### Voice & AI Integration
 
 - **Realtime AI** - For voice call functionality
-- **Cartesia** - Voice AI platform for voice calls
+
 - **OpenAI** - GPT-4o model for AI conversations
 
 ### Payment Processing
@@ -83,10 +83,6 @@ cd ..
 # Clerk Authentication
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
-
-# Cartesia Voice API
-CARTESIA_API_KEY=your_cartesia_api_key
-CARTESIA_URL=https://api.cartesia.ai
 
 # Backend URL (for API calls)
 BACKEND_URL=http://localhost:8080
@@ -188,7 +184,7 @@ pinkhoney/
 ### Next.js API Routes
 
 - `POST /api/connect` - Connect to voice call service
-- `POST /api/tts` - Text-to-speech conversion using Cartesia API
+
 - `POST /api/clerk-auth` - Handle Clerk authentication in Next.js
 
 ## Environment Variables
@@ -200,9 +196,6 @@ pinkhoney/
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 
-# Cartesia Voice API
-CARTESIA_API_KEY=your_cartesia_api_key
-CARTESIA_URL=https://api.cartesia.ai
 ```
 
 ### Backend (.env)
@@ -283,7 +276,7 @@ Pink Honey offers three subscription tiers:
 
 - **Design & Development**: Pink Honey Team
 - **AI Integration**: Powered by Anthropic Claude
-- **Voice Technology**: Cartesia and Realtime AI
+- **Voice Technology**: Realtime AI
 
 ## API Testing with Postman
 
@@ -326,7 +319,6 @@ The collection is organized into the following folders:
 - **Voice**: Endpoints for voice call functionality
 
   - `POST /api/connect` - Connect to voice call service
-  - `POST /api/tts` - Text-to-speech conversion using Cartesia API
 
 - **System**: System-related endpoints
   - `GET /health` - Server health check
