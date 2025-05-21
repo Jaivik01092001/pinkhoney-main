@@ -8,14 +8,67 @@ import { useState, useEffect } from "react";
 function Chat() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const user_id = searchParams.get("user_id");
+  const urlUserId = searchParams.get("user_id");
   const email = searchParams.get("email");
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [user_id, setUserId] = useState(urlUserId);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch user_id from backend if not available in URL or empty
+  useEffect(() => {
+    async function fetchUserId() {
+      // Check if urlUserId is empty, null, or undefined
+      if ((!urlUserId || urlUserId === "") && email) {
+        setIsLoading(true);
+        try {
+          console.log("Fetching user_id from backend");
+          const response = await fetch("http://127.0.0.1:8080/api/get_user_by_email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log("User data:", data);
+            if (data.user_id) {
+              setUserId(data.user_id);
+              console.log("Setting user_id to:", data.user_id);
+            }
+          } else {
+            console.error("Failed to fetch user data");
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchUserId();
+  }, [urlUserId, email]);
 
   function handle_stripe() {
-    router.push(
-      `http://127.0.0.1:8080/api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`
-    );
+    console.log("Current user_id:", user_id);
+    console.log("Selected plan:", selectedPlan);
+
+    if (!user_id) {
+      alert("User ID is required. Please try again or go back to the home page.");
+      return;
+    }
+
+    if (!selectedPlan) {
+      alert("Please select a plan first.");
+      return;
+    }
+
+    const checkoutUrl = `http://127.0.0.1:8080/api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`;
+    console.log("Redirecting to:", checkoutUrl);
+
+    router.push(checkoutUrl);
   }
 
   const plans = [
@@ -172,11 +225,21 @@ function Chat() {
             <i className="fas fa-info-circle mr-2"></i>
             <p>No hidden fees. Cancel subscription at any time</p>
           </div>
+
+          {/* Debug info - remove in production */}
+          <div className="text-xs text-gray-400 mt-2 mb-2">
+            {isLoading ? "Loading user data..." : user_id ? `User ID: ${user_id}` : "No user ID available"}
+          </div>
           <button
             onClick={handle_stripe}
-            className="sticky bottom-4 mt-1 w-full bg-pink-500 text-white text-lg font-bold py-3 rounded-lg shadow-md hover:bg-pink-600 transition duration-300"
+            disabled={isLoading || !selectedPlan}
+            className={`sticky bottom-4 mt-1 w-full text-white text-lg font-bold py-3 rounded-lg shadow-md transition duration-300 ${
+              isLoading || !selectedPlan
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-pink-500 hover:bg-pink-600"
+            }`}
           >
-            Upgrade Now <i className="fas fa-arrow-right ml-2"></i>
+            {isLoading ? "Loading..." : "Upgrade Now"} {!isLoading && <i className="fas fa-arrow-right ml-2"></i>}
           </button>
         </div>
       </div>

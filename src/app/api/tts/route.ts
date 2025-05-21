@@ -1,55 +1,47 @@
-// [POST] /api/tts
-export async function POST(request: Request) {
-  const { text, voiceId } = await request.json();
-  
-  if (!text || !process.env.CARTESIA_API_KEY) {
-    return Response.json("Text or API key not provided", {
-      status: 400,
-    });
-  }
+import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export async function POST(request: NextRequest) {
   try {
-    const response = await fetch(`${process.env.CARTESIA_URL}/tts/bytes`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cartesia-Version": "2024-06-10",
-        "X-API-Key": process.env.CARTESIA_API_KEY,
-      },
-      body: JSON.stringify({
-        model_id: "sonic-2",
-        transcript: text,
-        voice: {
-          mode: "id",
-          id: voiceId || "bf0a246a-8642-498a-9950-80c35e9276b5",
-        },
-        output_format: {
-          container: "wav",
-          encoding: "pcm_f32le",
-          sample_rate: 44100,
-        },
-        language: "en",
-      }),
-    });
+    const { text, voiceId } = await request.json();
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("Cartesia API error:", errorData);
-      return Response.json({ error: "Failed to generate speech" }, { status: response.status });
+    if (!text) {
+      return NextResponse.json(
+        { error: 'Missing required field: text' },
+        { status: 400 }
+      );
     }
 
+    // Use a female voice (alloy, nova, shimmer are female voices)
+    const voice = voiceId || 'nova'; // Default to nova (female voice) if not specified
+
+    // Call OpenAI TTS API
+    const response = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice,
+      input: text,
+    });
+
     // Get the audio data as an ArrayBuffer
-    const audioData = await response.arrayBuffer();
-    
-    // Return the audio data with the appropriate content type
-    return new Response(audioData, {
+    const buffer = await response.arrayBuffer();
+
+    // Return the audio data with appropriate headers
+    return new NextResponse(buffer, {
       headers: {
-        "Content-Type": "audio/wav",
-        "Content-Length": audioData.byteLength.toString(),
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': buffer.byteLength.toString(),
       },
     });
   } catch (error) {
-    console.error("Error generating speech:", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    console.error('Error generating speech:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate speech' },
+      { status: 500 }
+    );
   }
 }

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call your backend API to create/update user in MongoDB
-    const response = await fetch(`${process.env.BACKEND_URL || 'http://localhost:8080'}/api/check_email`, {
+    const response = await fetch(`${process.env.BACKEND_URL || 'http://localhost:8080'}/api/clerk_sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -26,15 +26,37 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorMessage = 'Failed to sync user with database';
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } else {
+          // If not JSON, just get the text
+          const errorText = await response.text();
+          console.error('Non-JSON error response:', errorText);
+        }
+      } catch (parseError) {
+        console.error('Error parsing error response:', parseError);
+      }
+
       return NextResponse.json(
-        { error: errorData.error || 'Failed to sync user with database' },
+        { error: errorMessage },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    try {
+      const data = await response.json();
+      return NextResponse.json(data);
+    } catch (parseError) {
+      console.error('Error parsing JSON response:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid response from server' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error syncing user with database:', error);
     return NextResponse.json(

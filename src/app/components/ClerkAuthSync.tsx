@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 export default function ClerkAuthSync() {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -21,15 +21,15 @@ export default function ClerkAuthSync() {
         const lastName = user.lastName;
 
         if (!email) {
-          console.error('User email not available');
+          console.error("User email not available");
           return;
         }
 
         // Call our API route to sync with MongoDB
-        const response = await fetch('/api/clerk-auth', {
-          method: 'POST',
+        const response = await fetch("/api/clerk-auth", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             userId,
@@ -41,19 +41,19 @@ export default function ClerkAuthSync() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error('Failed to sync user with database:', errorData.error);
+          console.error("Failed to sync user with database:", errorData.error);
           return;
         }
 
         const data = await response.json();
-        console.log('User synced with database:', data);
-        
+        console.log("User synced with database:", data);
+
         // Redirect to home page with user_id and email as query parameters
         if (data.user_id) {
-          router.push(`/home?user_id=${data.user_id}&email=${email}`);
+          // router.push(`/home?user_id=${data.user_id}&email=${email}`);
         }
       } catch (error) {
-        console.error('Error syncing user with database:', error);
+        console.error("Error syncing user with database:", error);
       }
     };
 

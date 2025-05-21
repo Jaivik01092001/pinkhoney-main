@@ -19,7 +19,7 @@ This backend provides API endpoints for the Pink Honey frontend, handling:
 - **Mongoose** - MongoDB object modeling for Node.js
 - **OpenAI API** - AI conversation generation
 - **Stripe API** - Payment processing
-- **Cartesia API** - Voice call functionality
+
 - **Clerk** - Authentication and user management
 
 ## Getting Started
@@ -30,7 +30,7 @@ This backend provides API endpoints for the Pink Honey frontend, handling:
 - MongoDB database (local or Atlas)
 - OpenAI API key
 - Stripe account and API keys
-- Cartesia account and API key
+
 - Clerk account for authentication
 
 ### Installation
@@ -101,10 +101,6 @@ STRIPE_DEFAULT_PRICE_ID=price_default_id_here
 STRIPE_LIFETIME_PRICE_ID=price_lifetime_id_here
 STRIPE_YEARLY_PRICE_ID=price_yearly_id_here
 STRIPE_MONTHLY_PRICE_ID=price_monthly_id_here
-
-# Cartesia Voice API
-CARTESIA_API_KEY=your_cartesia_api_key_here
-CARTESIA_URL=https://api.cartesia.ai
 
 # MongoDB Configuration
 MONGODB_URI=mongodb://localhost:27017/pinkhoney

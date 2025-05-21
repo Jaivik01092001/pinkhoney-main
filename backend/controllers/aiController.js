@@ -8,9 +8,8 @@ const { saveChatMessage, getChatHistory } = require("../services/mongoService");
  * Get AI response for user message
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
-const getAIResponseHandler = async (req, res, next) => {
+const getAIResponseHandler = async (req, res) => {
   try {
     const { message, name, personality, image, user_id } = req.body;
 
@@ -24,28 +23,10 @@ const getAIResponseHandler = async (req, res, next) => {
 
     // Save user message to chat history if user_id is provided
     if (user_id) {
-      const userMessage = {
-        text: message,
-        sender: "user",
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        timestamp: new Date(),
-      };
-
-      await saveChatMessage(user_id, name, personality, image, userMessage);
-    }
-
-    // Get AI response
-    const aiResponses = await getAIResponse(message, name, personality);
-
-    // Save AI responses to chat history if user_id is provided
-    if (user_id) {
-      for (const response of aiResponses) {
-        const botMessage = {
-          text: response,
-          sender: "bot",
+      try {
+        const userMessage = {
+          text: message,
+          sender: "user",
           time: new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
@@ -53,8 +34,48 @@ const getAIResponseHandler = async (req, res, next) => {
           timestamp: new Date(),
         };
 
-        await saveChatMessage(user_id, name, personality, image, botMessage);
+        await saveChatMessage(user_id, name, personality, image, userMessage);
+      } catch (saveError) {
+        console.error("Error saving user message:", saveError);
+        // Continue execution even if saving fails
       }
+    }
+
+    // Get AI response
+    const aiResponses = await getAIResponse(message, name, personality);
+
+    // Save AI responses to chat history if user_id is provided
+    if (user_id) {
+      let savedResponses = 0;
+      for (const response of aiResponses) {
+        // Skip empty responses to avoid MongoDB validation errors
+        if (!response || response.trim() === "") {
+          console.log("Skipping empty AI response");
+          continue;
+        }
+
+        try {
+          const botMessage = {
+            text: response,
+            sender: "bot",
+            time: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            timestamp: new Date(),
+          };
+
+          await saveChatMessage(user_id, name, personality, image, botMessage);
+          savedResponses++;
+        } catch (saveError) {
+          console.error("Error saving bot message:", saveError);
+          // Continue with other responses even if one fails
+        }
+      }
+
+      console.log(
+        `Successfully saved ${savedResponses} out of ${aiResponses.length} AI responses`
+      );
     }
 
     // Return response
@@ -63,7 +84,15 @@ const getAIResponseHandler = async (req, res, next) => {
       llm_ans: aiResponses, // Match the format expected by the frontend
     });
   } catch (error) {
-    next(error);
+    console.error("Error in getAIResponseHandler:", error);
+
+    // Send a more user-friendly error response
+    res.status(500).json({
+      success: false,
+      error: "Failed to process your message. Please try again.",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
@@ -71,9 +100,8 @@ const getAIResponseHandler = async (req, res, next) => {
  * Get chat history for a user and companion
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
  */
-const getChatHistoryHandler = async (req, res, next) => {
+const getChatHistoryHandler = async (req, res) => {
   try {
     const { user_id, companion_name } = req.query;
 
@@ -101,7 +129,15 @@ const getChatHistoryHandler = async (req, res, next) => {
       messages: chatHistory.messages,
     });
   } catch (error) {
-    next(error);
+    console.error("Error in getChatHistoryHandler:", error);
+
+    // Send a more user-friendly error response
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve chat history. Please try again.",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 

@@ -1,30 +1,20 @@
-/**
- * User routes
- */
-const express = require('express');
-const { checkEmail, changeSubscription, increaseTokens } = require('../controllers/userController');
-
+const express = require("express");
+const { requireAuth } = require('@clerk/express');
 const router = express.Router();
+const {
+  checkEmail,
+  changeSubscription,
+  increaseTokens,
+} = require("../controllers/userController");
+const { userValidation } = require("../middleware/userValidation");
 
-/**
- * @route   POST /api/check_email
- * @desc    Check if a user exists by email, create if not exists
- * @access  Public
- */
-router.post('/check_email', checkEmail);
+// Protected routes that require authentication
+router.post("/check_email", requireAuth(), userValidation, checkEmail);
+router.post("/change_subscription", requireAuth(), userValidation, changeSubscription);
+router.post("/increase_tokens", requireAuth(), userValidation, increaseTokens);
 
-/**
- * @route   POST /api/change_subscription
- * @desc    Change user subscription status
- * @access  Public
- */
-router.post('/change_subscription', changeSubscription);
-
-/**
- * @route   POST /api/increase_tokens
- * @desc    Increase user tokens
- * @access  Public
- */
-router.post('/increase_tokens', increaseTokens);
+// Special routes that don't require authentication
+router.post("/clerk_sync", checkEmail);
+router.post("/get_user_by_email", checkEmail); // For pricing page
 
 module.exports = router;

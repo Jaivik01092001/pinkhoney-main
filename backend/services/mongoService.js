@@ -101,6 +101,14 @@ const saveChatMessage = async (userId, name, personality, image, message) => {
       });
     }
 
+    // Validate message text before saving
+    if (!message.text || message.text.trim() === "") {
+      console.error(
+        `Error: Attempted to save empty message for user ${userId} with companion ${name}`
+      );
+      throw new Error("Message text cannot be empty");
+    }
+
     // Add message to chat history
     chatHistory.messages.push(message);
     chatHistory.lastUpdated = new Date();
