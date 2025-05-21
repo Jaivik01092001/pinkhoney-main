@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { FaPaperPlane, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
+import { FaPaperPlane, FaVolumeUp, FaVolumeMute, FaPhone } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import AudioPlayer from "../../components/AudioPlayer";
 
@@ -32,7 +32,7 @@ function Chat() {
   };
 
   function handle_call() {
-    router.push(`/call?name=${name}&personality=${personality}&image=${image}`);
+    router.push(`/call?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`);
   }
 
   function go_to_home() {
@@ -188,8 +188,11 @@ function Chat() {
               <div className="text-white font-bold text-lg">{name}</div>
               <div className="text-green-500 text-sm">Online</div>
             </div>
-            <button className="ml-4" onClick={handle_call}>
-              {/* Call button SVG */}
+            <button
+              className="ml-auto bg-green-600 hover:bg-green-700 text-white p-2 rounded-full"
+              onClick={handle_call}
+            >
+              <FaPhone size={20} />
             </button>
           </div>
 
@@ -198,14 +201,12 @@ function Chat() {
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${
-                  message.sender === "user" ? "justify-end" : ""
-                } mb-4`}
+                className={`flex ${message.sender === "user" ? "justify-end" : ""
+                  } mb-4`}
               >
                 <div
-                  className={`${
-                    message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
-                  } text-white p-3 rounded-lg max-w-xs`}
+                  className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
+                    } text-white p-3 rounded-lg max-w-xs`}
                 >
                   {message.text}
                 </div>
@@ -257,6 +258,14 @@ function Chat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             />
+
+            {/* Voice Toggle Button */}
+            <button
+              className={`text-2xl mr-2 ${voiceEnabled ? 'text-pink-500' : 'text-gray-500'}`}
+              onClick={toggleVoiceMode}
+            >
+              {voiceEnabled ? <FaVolumeUp /> : <FaVolumeMute />}
+            </button>
 
             {/* Send Button */}
             <button
