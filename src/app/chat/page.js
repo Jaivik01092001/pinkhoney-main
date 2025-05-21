@@ -12,7 +12,7 @@ function Chat() {
   const name = searchParams.get("name");
   const personality = searchParams.get("personality");
   const image = searchParams.get("image");
-  const user_id = searchParams.get("user_id");
+  const [userId, setUserId] = useState(searchParams.get("user_id") || "");
   const email = searchParams.get("email");
 
   const [messages, setMessages] = useState([]);
@@ -32,11 +32,11 @@ function Chat() {
   };
 
   function handle_call() {
-    router.push(`/call?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`);
+    router.push(`/call?name=${name}&personality=${personality}&image=${image}&user_id=${userId}&email=${email}`);
   }
 
   function go_to_home() {
-    router.push(`/home?user_id=${user_id}&email=${email}`);
+    router.push(`/home?user_id=${userId}&email=${email}`);
   }
 
   // Process a message
@@ -68,7 +68,7 @@ function Chat() {
             message: messageText,
             name: name,
             personality: personality,
-            user_id: user_id,
+            user_id: userId,
             image: image,
           }),
         }
@@ -147,20 +147,60 @@ function Chat() {
     setVoiceEnabled(!voiceEnabled);
   };
 
-  // Load chat history when component mounts
+  // Fetch user_id if missing but email is available
+  useEffect(() => {
+    const fetchUserIdIfMissing = async () => {
+      if (!userId && email) {
+        try {
+          console.log("Fetching user_id for email:", email);
+          const response = await fetch("http://127.0.0.1:8080/api/clerk_sync", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email }),
+          });
+
+          const data = await response.json();
+          if (data.user_id) {
+            console.log("Retrieved user_id:", data.user_id);
+            // Update the URL with the user_id without reloading the page
+            if (typeof window !== 'undefined') {
+              const newUrl = new URL(window.location.href);
+              newUrl.searchParams.set('user_id', data.user_id);
+              window.history.replaceState({}, '', newUrl.toString());
+            }
+
+            // Set the user_id in state
+            setUserId(data.user_id);
+          }
+        } catch (error) {
+          console.error("Error fetching user_id:", error);
+        }
+      }
+    };
+
+    fetchUserIdIfMissing();
+  }, [userId, email]);
+
+  // Load chat history when component mounts or userId changes
   useEffect(() => {
     const loadChatHistory = async () => {
-      if (!user_id || !name) return;
+      if (!userId || !name) return;
 
       try {
+        console.log("Loading chat history for user:", userId, "and companion:", name);
         const response = await fetch(
-          `http://127.0.0.1:8080/api/get_chat_history?user_id=${user_id}&companion_name=${name}`
+          `http://127.0.0.1:8080/api/get_chat_history?user_id=${userId}&companion_name=${name}`
         );
 
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.messages && data.messages.length > 0) {
+            console.log("Chat history loaded:", data.messages.length, "messages");
             setMessages(data.messages);
+          } else {
+            console.log("No chat history found or empty history");
           }
         }
       } catch (error) {
@@ -169,7 +209,7 @@ function Chat() {
     };
 
     loadChatHistory();
-  }, [user_id, name]);
+  }, [userId, name]);
 
   return (
     <>

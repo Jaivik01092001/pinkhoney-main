@@ -32,7 +32,7 @@ const io = new Server(server, {
     credentials: true
   }
 });
-const PORT = process.env.PORT || 3001; // Changed default port to 3001
+const PORT = process.env.PORT || 8080; // Default to 8080 to match frontend expectations
 
 // Middleware
 app.use(helmet()); // Security headers
@@ -72,29 +72,29 @@ app.use(errorHandler);
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // Handle voice data from client
-  socket.on("voice-data", async (data) => {
+  // Track conversation state for each socket
+  const conversationState = {
+    isProcessing: false,
+    queue: []
+  };
+
+  // Process the next item in the queue
+  const processNextInQueue = async () => {
+    if (conversationState.queue.length === 0 || conversationState.isProcessing) {
+      return;
+    }
+
+    // Set processing flag to prevent concurrent processing
+    conversationState.isProcessing = true;
+
+    // Get the next item from the queue
+    const data = conversationState.queue.shift();
+
     try {
-      console.log("Received voice data from client");
+      console.log("Processing voice data from queue");
 
-      // Check if we have the required data
-      if (!data || !data.audio) {
-        console.log("No audio data received");
-        socket.emit("error", { message: "No audio data received" });
-        return;
-      }
-
-      // Log the type of audio data received
-      console.log("Audio data type:", typeof data.audio, "format:", data.audio_format || "unknown");
-
-      // Force mp3 format for better compatibility with OpenAI
-      // Despite webm being listed as supported, it seems to have issues
-      const audioFormat = 'mp3'; // Force mp3 format regardless of what client sends
-
-      console.log(`Using forced audio format: ${audioFormat} for better compatibility`);
-
-      // Convert speech to text
-      const text = await speechToText(data.audio);
+      // Convert speech to text (using raw format to let the backend handle detection)
+      const text = await speechToText(data.audio, 'raw');
       console.log(`Transcribed text: ${text}`);
 
       // If we couldn't transcribe the speech or the text is empty, send an error message back
@@ -114,6 +114,12 @@ io.on("connection", (socket) => {
           text: errorResponse,
           audio: errorAudio
         });
+
+        // Mark as done processing
+        conversationState.isProcessing = false;
+
+        // Process next item if available
+        processNextInQueue();
         return;
       }
 
@@ -136,9 +142,57 @@ io.on("connection", (socket) => {
         text: aiResponse,
         audio: audioBuffer
       });
+
+      // Mark as done processing
+      conversationState.isProcessing = false;
+
+      // Process next item if available
+      processNextInQueue();
     } catch (error) {
       console.error("Error processing voice data:", error);
       socket.emit("error", { message: "Failed to process voice data" });
+
+      // Mark as done processing even if there was an error
+      conversationState.isProcessing = false;
+
+      // Process next item if available
+      processNextInQueue();
+    }
+  };
+
+  // Handle voice data from client
+  socket.on("voice-data", async (data) => {
+    console.log("Received voice data from client");
+
+    // Check if we have the required data
+    if (!data || !data.audio) {
+      console.log("No audio data received");
+      socket.emit("error", { message: "No audio data received" });
+      return;
+    }
+
+    // Log basic info about the received audio
+    console.log("Received audio data:",
+      typeof data.audio === 'string' ? `${data.audio.length} bytes` : 'invalid format');
+
+    // Skip processing if the audio data is too small
+    if (typeof data.audio === 'string' && data.audio.length < 100) {
+      console.warn("Audio data too small, skipping");
+      socket.emit("ai-response", {
+        text: "I couldn't hear anything. Could you please try speaking again?",
+        audio: null
+      });
+      return;
+    }
+
+    // Add to queue and process
+    conversationState.queue.push(data);
+
+    // If not currently processing, start processing the queue
+    if (!conversationState.isProcessing) {
+      processNextInQueue();
+    } else {
+      console.log("Already processing, added to queue. Queue length:", conversationState.queue.length);
     }
   });
 

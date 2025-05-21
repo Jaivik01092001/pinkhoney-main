@@ -8,8 +8,12 @@ const {
 } = require("../controllers/userController");
 const { userValidation } = require("../middleware/userValidation");
 
+// Protected routes that require authentication
 router.post("/check_email", requireAuth(), userValidation, checkEmail);
 router.post("/change_subscription", requireAuth(), userValidation, changeSubscription);
 router.post("/increase_tokens", requireAuth(), userValidation, increaseTokens);
+
+// Special route for Clerk auth sync that doesn't require authentication
+router.post("/clerk_sync", checkEmail);
 
 module.exports = router;

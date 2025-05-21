@@ -96,34 +96,53 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
           recognitionRef.current.start();
         }
 
-        // Initialize MediaRecorder for sending audio to server with specific options
-        // Prioritize formats that are definitely supported by OpenAI
-        // Despite webm being listed as supported, it seems to have issues
+        // Initialize MediaRecorder with the most reliable settings for speech recognition
+        // We'll prioritize formats that are known to work well with speech recognition
         const mimeTypes = [
+          // PCM audio is the most reliable for speech recognition
+          'audio/webm;codecs=pcm',
+          'audio/wav',
+          // Fallback to other common formats
+          'audio/ogg;codecs=opus',
+          'audio/ogg',
           'audio/mp3',
           'audio/mpeg',
-          'audio/wav',
-          'audio/ogg;codecs=opus',
-          'audio/m4a',
-          'audio/webm',
-          'audio/webm;codecs=opus'
+          'audio/webm'
         ];
 
         // Find the first supported MIME type
         let selectedMimeType = '';
-        for (const mimeType of mimeTypes) {
-          if (MediaRecorder.isTypeSupported(mimeType)) {
-            selectedMimeType = mimeType;
-            console.log(`Found supported audio format: ${mimeType}`);
-            break;
+
+        // First check if PCM in WebM is supported (best quality)
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')) {
+          selectedMimeType = 'audio/webm;codecs=pcm';
+          console.log('Using PCM audio format (highest quality)');
+        }
+        // Then check for WAV
+        else if (MediaRecorder.isTypeSupported('audio/wav')) {
+          selectedMimeType = 'audio/wav';
+          console.log('Using WAV audio format');
+        }
+        // Otherwise, try other formats
+        else {
+          for (const mimeType of mimeTypes) {
+            if (MediaRecorder.isTypeSupported(mimeType)) {
+              selectedMimeType = mimeType;
+              console.log(`Using audio format: ${mimeType}`);
+              break;
+            }
           }
         }
 
-        // Configure MediaRecorder options
+        if (!selectedMimeType) {
+          console.log("Using browser default audio format");
+        }
+
+        // Configure MediaRecorder with conservative settings for speech
         const options = selectedMimeType ?
           {
             mimeType: selectedMimeType,
-            audioBitsPerSecond: 128000
+            audioBitsPerSecond: 16000 // 16kHz is standard for speech recognition
           } :
           undefined;
 
@@ -172,9 +191,50 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
     setStatusMessage('Connected');
   };
 
+  // Start listening for user speech
+  const startListening = () => {
+    if (recognitionRef.current) {
+      try {
+        // Stop any existing recognition session
+        recognitionRef.current.stop();
+
+        // Small delay to ensure recognition has fully stopped
+        setTimeout(() => {
+          try {
+            // Start a new recognition session
+            recognitionRef.current?.start();
+            console.log("Started listening for user speech");
+          } catch (error) {
+            console.error("Error starting speech recognition:", error);
+          }
+        }, 100);
+      } catch (error) {
+        console.error("Error stopping speech recognition:", error);
+
+        // Try to start anyway
+        try {
+          recognitionRef.current.start();
+        } catch (startError) {
+          console.error("Error starting speech recognition after failed stop:", startError);
+        }
+      }
+    }
+  };
+
   // Handle AI response from server
   const handleAIResponse = (data: { text: string, audio: ArrayBuffer | null }) => {
+    console.log("Received AI response:", data.text);
     setAiResponse(data.text);
+
+    // Stop listening while AI is speaking to prevent feedback
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        console.log("Stopped listening while AI is speaking");
+      } catch (error) {
+        console.error("Error stopping speech recognition:", error);
+      }
+    }
 
     // Play audio if volume is not muted and audio data is available
     if (!isVolumeMuted && audioContextRef.current && data.audio) {
@@ -184,11 +244,21 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
           source.buffer = buffer;
           source.connect(audioContextRef.current!.destination);
           source.start(0);
+
+          // Start listening again when audio playback ends
+          source.onended = () => {
+            console.log("Audio playback ended, starting to listen again");
+            setTimeout(startListening, 500);
+          };
         }, (error) => {
           console.error("Error decoding audio data:", error);
+          // Start listening again even if there was an error
+          setTimeout(startListening, 500);
         });
       } catch (error) {
         console.error("Error processing audio response:", error);
+        // Start listening again even if there was an error
+        setTimeout(startListening, 500);
       }
     } else if (!data.audio) {
       console.log("No audio data received from server");
@@ -196,46 +266,69 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
       // Use browser's speech synthesis as fallback if no audio data
       if (!isVolumeMuted && 'speechSynthesis' in window) {
         try {
-          // Cancel any ongoing speech
+          // Make sure any previous speech is canceled
           window.speechSynthesis.cancel();
 
-          const utterance = new SpeechSynthesisUtterance(data.text);
+          // Small delay to ensure previous speech is fully canceled
+          setTimeout(() => {
+            const utterance = new SpeechSynthesisUtterance(data.text);
 
-          // Set speech properties for a more natural sound
-          utterance.rate = 1.0;  // Normal speed
-          utterance.pitch = 1.1; // Slightly higher pitch for female voice
-          utterance.volume = 1.0; // Full volume
+            // Set speech properties for a more natural sound
+            utterance.rate = 1.0;  // Normal speed
+            utterance.pitch = 1.1; // Slightly higher pitch for female voice
+            utterance.volume = 1.0; // Full volume
 
-          // Try to use a female voice if available
-          const femaleVoice = voices.find(voice =>
-            voice.name.toLowerCase().includes('female') ||
-            voice.name.includes('nova') ||
-            voice.name.includes('samantha') ||
-            voice.name.includes('lisa') ||
-            voice.name.includes('victoria') ||
-            voice.name.includes('karen') ||
-            voice.name.includes('moira') ||
-            voice.name.includes('tessa')
-          );
+            // Try to use a female voice if available
+            const femaleVoice = voices.find(voice =>
+              voice.name.toLowerCase().includes('female') ||
+              voice.name.includes('nova') ||
+              voice.name.includes('samantha') ||
+              voice.name.includes('lisa') ||
+              voice.name.includes('victoria') ||
+              voice.name.includes('karen') ||
+              voice.name.includes('moira') ||
+              voice.name.includes('tessa')
+            );
 
-          if (femaleVoice) {
-            console.log("Using female voice:", femaleVoice.name);
-            utterance.voice = femaleVoice;
-          } else if (voices.length > 0) {
-            // If no female voice found, use the first available voice
-            console.log("No female voice found, using:", voices[0].name);
-            utterance.voice = voices[0];
-          }
+            if (femaleVoice) {
+              console.log("Using female voice:", femaleVoice.name);
+              utterance.voice = femaleVoice;
+            } else if (voices.length > 0) {
+              // If no female voice found, use the first available voice
+              console.log("No female voice found, using:", voices[0].name);
+              utterance.voice = voices[0];
+            }
 
-          // Add event listeners for speech events
-          utterance.onstart = () => console.log("Speech started");
-          utterance.onend = () => console.log("Speech ended");
-          utterance.onerror = (e) => console.error("Speech error:", e);
+            // Add event listeners for speech events
+            utterance.onstart = () => console.log("Speech started");
+            utterance.onend = () => {
+              console.log("Speech ended, starting to listen again");
+              setTimeout(startListening, 500);
+            };
+            utterance.onerror = (e) => {
+              console.error("Speech error:", e);
+              // If speech is interrupted, try again with a simpler approach
+              if (e.error === 'interrupted') {
+                console.log("Speech was interrupted, trying again with default settings");
+                const simpleUtterance = new SpeechSynthesisUtterance(data.text);
+                simpleUtterance.onend = () => setTimeout(startListening, 500);
+                window.speechSynthesis.speak(simpleUtterance);
+              } else {
+                // Start listening again even if there was an error
+                setTimeout(startListening, 500);
+              }
+            };
 
-          window.speechSynthesis.speak(utterance);
+            window.speechSynthesis.speak(utterance);
+          }, 100); // Small delay to ensure previous speech is fully canceled
         } catch (error) {
           console.error("Error using speech synthesis:", error);
+          // Start listening again even if there was an error
+          setTimeout(startListening, 500);
         }
+      } else {
+        // If speech synthesis is not available or volume is muted, start listening again
+        setTimeout(startListening, 500);
       }
     }
   };
@@ -252,8 +345,19 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
     // Use speech synthesis to announce the error
     if ('speechSynthesis' in window && !isVolumeMuted) {
       try {
-        const utterance = new SpeechSynthesisUtterance(`Sorry, there was an error. Please try again.`);
-        window.speechSynthesis.speak(utterance);
+        // Make sure any previous speech is canceled
+        window.speechSynthesis.cancel();
+
+        // Small delay to ensure previous speech is fully canceled
+        setTimeout(() => {
+          const utterance = new SpeechSynthesisUtterance(`Sorry, there was an error. Please try again.`);
+
+          // Use simpler settings for error messages
+          utterance.rate = 0.9;  // Slightly slower for clarity
+          utterance.volume = 1.0; // Full volume
+
+          window.speechSynthesis.speak(utterance);
+        }, 100);
       } catch (e) {
         console.error("Error using speech synthesis for error:", e);
       }
@@ -270,66 +374,75 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
   // Handle audio data from MediaRecorder
   const handleDataAvailable = (event: BlobEvent) => {
     if (event.data.size > 0 && socketRef.current && !isMuted) {
-      console.log("Audio data available, size:", event.data.size, "type:", event.data.type);
+      console.log("Audio data available, size:", event.data.size);
 
-      // Get the original MIME type from the recorder
-      const originalType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-      console.log("Original audio MIME type:", originalType);
-
-      // Extract the format from the MIME type (e.g., 'audio/webm' -> 'webm')
-      let format = originalType.split('/')[1];
-      if (format.includes(';')) {
-        format = format.split(';')[0];
-      }
-
-      // Force mp3 format for better compatibility with OpenAI
-      // Despite webm being listed as supported, it seems to have issues
-      format = 'mp3';
-
-      console.log(`Using audio format for transmission: ${format} (forced for compatibility)`);
-
-      // Create a new blob with the original type
-      const audioBlob = new Blob([event.data], { type: originalType });
-
-      // Convert blob to array buffer
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (socketRef.current) {
-          // Get the result as ArrayBuffer
-          const arrayBuffer = reader.result as ArrayBuffer;
-
-          // Convert ArrayBuffer to Base64 string for easier transmission
-          // Use a safer approach to convert binary data to base64
-          let binary = '';
-          const bytes = new Uint8Array(arrayBuffer);
-          const len = bytes.byteLength;
-          for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          const base64Audio = btoa(binary);
-
-          console.log("Sending audio data to server, length:", base64Audio.length, "format:", format);
-
-          // Send the base64 encoded audio data to the server
-          socketRef.current.emit('voice-data', {
-            audio: base64Audio,
-            audio_format: format, // Send the actual format extracted from the MIME type
-            companion_name: name,
-            personality: personality
-          });
+      try {
+        // Skip very small audio data
+        if (event.data.size < 100) {
+          console.warn("Audio data too small, skipping");
+          return;
         }
-      };
-      reader.readAsArrayBuffer(audioBlob);
+
+        // Convert blob to array buffer
+        const reader = new FileReader();
+
+        reader.onloadend = () => {
+          if (socketRef.current) {
+            try {
+              // Get the result as ArrayBuffer
+              const arrayBuffer = reader.result as ArrayBuffer;
+
+              if (!arrayBuffer) {
+                console.error("Failed to read audio data");
+                return;
+              }
+
+              // Convert ArrayBuffer to Base64 string for transmission
+              let binary = '';
+              const bytes = new Uint8Array(arrayBuffer);
+              const len = bytes.byteLength;
+
+              for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+
+              const base64Audio = btoa(binary);
+
+              console.log(`Sending audio data (${base64Audio.length} bytes)`);
+
+              // Send the base64 encoded audio data to the server
+              // Use 'raw' as the format to let the server handle detection
+              socketRef.current.emit('voice-data', {
+                audio: base64Audio,
+                audio_format: 'raw', // Let the server handle format detection
+                companion_name: name,
+                personality: personality
+              });
+            } catch (error) {
+              console.error("Error processing audio data");
+            }
+          }
+        };
+
+        reader.onerror = () => {
+          console.error("Error reading audio data");
+        };
+
+        reader.readAsArrayBuffer(event.data);
+      } catch (error) {
+        console.error("Error handling audio data");
+      }
     }
   };
 
   // Toggle mute
   const toggleMute = () => {
-    setIsMuted(!isMuted);
+    const newMuteState = !isMuted;
+    setIsMuted(newMuteState);
 
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = isMuted; // Toggle the current state
+        track.enabled = !newMuteState; // When muted is true, tracks should be disabled
       });
     }
   };
