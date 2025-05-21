@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const mongoose = require("mongoose");
 const { errorHandler } = require("./middleware/errorHandler");
 const connectDB = require("./config/database");
+const { clerkMiddleware } = require('@clerk/express');
 
 // Import routes
 const aiRoutes = require("./routes/aiRoutes");
@@ -32,6 +33,12 @@ app.use(
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use(morgan("dev")); // Request logging
+
+app.use(
+  clerkMiddleware({
+    secretKey: process.env.CLERK_SECRET_KEY,   // same env var as before
+  })
+);
 
 // Routes
 app.use("/api", aiRoutes);
