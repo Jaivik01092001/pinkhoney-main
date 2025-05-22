@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
@@ -8,7 +7,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { errorHandler } = require("./middleware/errorHandler");
 const connectDB = require("./config/database");
-const { clerkMiddleware } = require('@clerk/express');
+const { clerkMiddleware } = require("@clerk/express");
 const { speechToText, textToSpeech } = require("./services/speechService");
 const { getAIResponse } = require("./services/aiService");
 
@@ -29,34 +28,80 @@ const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
   },
   // Improve connection stability
   pingTimeout: 60000,
   pingInterval: 25000,
-  transports: ['websocket', 'polling'],
+  transports: ["websocket", "polling"],
   allowUpgrades: true,
   upgradeTimeout: 10000,
-  maxHttpBufferSize: 5e6 // 5MB max buffer size for audio data
+  maxHttpBufferSize: 5e6, // 5MB max buffer size for audio data
 });
 const PORT = process.env.PORT || 8080; // Default to 8080 to match frontend expectations
 
 // Middleware
-app.use(helmet()); // Security headers
+// Configure Helmet with enhanced security settings
 app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: [
+          "'self'",
+          process.env.FRONTEND_URL || "http://localhost:3000",
+        ],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'self'"],
+      },
+    },
+    xssFilter: true,
+    noSniff: true,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    hsts: {
+      maxAge: 15552000, // 180 days in seconds
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: { action: "deny" },
+    permittedCrossDomainPolicies: { permittedPolicies: "none" },
   })
 );
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use(morgan("dev")); // Request logging
+
+// Use the custom CORS middleware from middleware/cors.js
+const corsMiddleware = require("./middleware/cors");
+app.use(corsMiddleware);
+
+// Rate limiting to prevent abuse
+const rateLimit = require("express-rate-limit");
+const config = require("./config/config");
+
+const apiLimiter = rateLimit({
+  windowMs: config.security.rateLimiting.windowMs,
+  max: config.security.rateLimiting.max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again later.",
+});
+
+// Apply rate limiting to all API routes
+app.use("/api", apiLimiter);
+
+// Body parsers with size limits to prevent abuse
+app.use(express.json({ limit: "1mb" })); // Parse JSON bodies with size limit
+app.use(express.urlencoded({ extended: true, limit: "1mb" })); // Parse URL-encoded bodies with size limit
+
+// Request logging
+app.use(morgan("dev"));
 
 app.use(
   clerkMiddleware({
-    secretKey: process.env.CLERK_SECRET_KEY,   // same env var as before
+    secretKey: process.env.CLERK_SECRET_KEY, // same env var as before
   })
 );
 
@@ -68,7 +113,7 @@ app.use("/api", clerkRoutes);
 app.use("/api", voiceRoutes);
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_, res) => {
   res.status(200).json({ status: "ok", message: "Server is running" });
 });
 
@@ -81,7 +126,7 @@ io.on("connection", (socket) => {
 
   // Set up a heartbeat to keep the connection alive
   let heartbeatInterval = setInterval(() => {
-    socket.emit('heartbeat', { timestamp: Date.now() });
+    socket.emit("heartbeat", { timestamp: Date.now() });
   }, 20000); // Send heartbeat every 20 seconds
 
   // Track conversation state for each socket
@@ -90,10 +135,10 @@ io.on("connection", (socket) => {
     queue: [],
     lastProcessedTime: 0,
     processingTimeout: null,
-    lastValidTranscription: '',
+    lastValidTranscription: "",
     transcriptionHistory: [], // Keep track of recent transcriptions
     conversationTurn: 0, // Track conversation turns (0 = start, odd = user, even = AI)
-    lastResponseTime: Date.now() // Track when the last response was sent
+    lastResponseTime: Date.now(), // Track when the last response was sent
   };
 
   // Process the next item in the queue
@@ -105,7 +150,10 @@ io.on("connection", (socket) => {
     }
 
     // Check if queue is empty or already processing
-    if (conversationState.queue.length === 0 || conversationState.isProcessing) {
+    if (
+      conversationState.queue.length === 0 ||
+      conversationState.isProcessing
+    ) {
       return;
     }
 
@@ -137,7 +185,7 @@ io.on("connection", (socket) => {
       console.log("Processing voice data from queue");
 
       // Get the audio format from the data or default to 'raw'
-      const audioFormat = data.audio_format || 'raw';
+      const audioFormat = data.audio_format || "raw";
       console.log(`Using audio format: ${audioFormat}`);
 
       // Convert speech to text
@@ -146,13 +194,16 @@ io.on("connection", (socket) => {
 
       // Store the last valid transcription for comparison
       if (!conversationState.lastValidTranscription) {
-        conversationState.lastValidTranscription = '';
+        conversationState.lastValidTranscription = "";
       }
 
       // Validate the transcribed text
       const isValidText = (text) => {
         // Check if the text contains error messages
-        if (text.includes("I couldn't understand") || text.includes("Error processing")) {
+        if (
+          text.includes("I couldn't understand") ||
+          text.includes("Error processing")
+        ) {
           console.log("Transcription contains error messages, rejecting");
           return false;
         }
@@ -168,7 +219,9 @@ io.on("connection", (socket) => {
 
         // Reject transcriptions with fewer than 2 words
         if (wordCount < 2) {
-          console.log(`Transcription has only ${wordCount} word(s), rejecting as too short`);
+          console.log(
+            `Transcription has only ${wordCount} word(s), rejecting as too short`
+          );
           return false;
         }
 
@@ -181,7 +234,7 @@ io.on("connection", (socket) => {
           "in the description",
           "thank you for watching",
           "don't forget to subscribe",
-          "hit the like button"
+          "hit the like button",
         ];
 
         // Check if the text contains any of the common errors
@@ -195,15 +248,29 @@ io.on("connection", (socket) => {
         // Check if this is a duplicate or fragment of the previous transcription
         if (conversationState.lastValidTranscription) {
           // If the current text is a substring of the last valid transcription
-          if (conversationState.lastValidTranscription.toLowerCase().includes(text.toLowerCase())) {
-            console.log(`Transcription "${text}" is a fragment of previous transcription, rejecting`);
+          if (
+            conversationState.lastValidTranscription
+              .toLowerCase()
+              .includes(text.toLowerCase())
+          ) {
+            console.log(
+              `Transcription "${text}" is a fragment of previous transcription, rejecting`
+            );
             return false;
           }
 
           // If the current text is very similar to the last valid transcription
-          const similarity = calculateTextSimilarity(text, conversationState.lastValidTranscription);
-          if (similarity > 0.7) { // 70% similarity threshold
-            console.log(`Transcription too similar to previous (${Math.round(similarity * 100)}% similar), rejecting`);
+          const similarity = calculateTextSimilarity(
+            text,
+            conversationState.lastValidTranscription
+          );
+          if (similarity > 0.7) {
+            // 70% similarity threshold
+            console.log(
+              `Transcription too similar to previous (${Math.round(
+                similarity * 100
+              )}% similar), rejecting`
+            );
             return false;
           }
         }
@@ -227,8 +294,9 @@ io.on("connection", (socket) => {
         if (s1 === s2) return 1;
 
         // Calculate Levenshtein distance
-        const track = Array(s2.length + 1).fill(null).map(() =>
-          Array(s1.length + 1).fill(null));
+        const track = Array(s2.length + 1)
+          .fill(null)
+          .map(() => Array(s1.length + 1).fill(null));
 
         for (let i = 0; i <= s1.length; i += 1) {
           track[0][i] = i;
@@ -244,7 +312,7 @@ io.on("connection", (socket) => {
             track[j][i] = Math.min(
               track[j][i - 1] + 1, // deletion
               track[j - 1][i] + 1, // insertion
-              track[j - 1][i - 1] + indicator, // substitution
+              track[j - 1][i - 1] + indicator // substitution
             );
           }
         }
@@ -252,7 +320,7 @@ io.on("connection", (socket) => {
         // Calculate similarity as 1 - normalized distance
         const maxLength = Math.max(s1.length, s2.length);
         const distance = track[s2.length][s1.length];
-        return 1 - (distance / maxLength);
+        return 1 - distance / maxLength;
       };
 
       // If the transcribed text is not valid, send an error message back
@@ -260,14 +328,18 @@ io.on("connection", (socket) => {
         console.log("Invalid transcription detected, sending error response");
 
         // Generate a friendly response for failed transcription
-        const errorResponse = "I'm sorry, I couldn't understand what you said. Could you please try speaking again?";
+        const errorResponse =
+          "I'm sorry, I couldn't understand what you said. Could you please try speaking again?";
 
         // Try to generate audio for the error message
         let errorAudio = null;
         try {
           errorAudio = await textToSpeech(errorResponse);
         } catch (audioError) {
-          console.error("Error generating speech for error message:", audioError);
+          console.error(
+            "Error generating speech for error message:",
+            audioError
+          );
         }
 
         // Increment conversation turn for error response
@@ -277,7 +349,7 @@ io.on("connection", (socket) => {
           text: errorResponse,
           audio: errorAudio,
           conversationTurn: conversationState.conversationTurn,
-          userTranscript: text // Include the user's transcribed text even for errors
+          userTranscript: text, // Include the user's transcribed text even for errors
         });
 
         // Mark as done processing
@@ -292,7 +364,11 @@ io.on("connection", (socket) => {
       conversationState.conversationTurn++;
 
       // Get AI response
-      const aiResponses = await getAIResponse(text, data.companion_name, data.personality);
+      const aiResponses = await getAIResponse(
+        text,
+        data.companion_name,
+        data.personality
+      );
       const aiResponse = aiResponses[0]; // Get the first response
       console.log(`AI response: ${aiResponse}`);
 
@@ -304,7 +380,10 @@ io.on("connection", (socket) => {
       try {
         audioBuffer = await textToSpeech(aiResponse);
       } catch (ttsError) {
-        console.error("Error in text-to-speech, falling back to browser TTS:", ttsError);
+        console.error(
+          "Error in text-to-speech, falling back to browser TTS:",
+          ttsError
+        );
       }
 
       // Send the audio response back to the client
@@ -313,7 +392,7 @@ io.on("connection", (socket) => {
         text: aiResponse,
         audio: audioBuffer,
         conversationTurn: conversationState.conversationTurn,
-        userTranscript: text // Include the user's transcribed text
+        userTranscript: text, // Include the user's transcribed text
       });
 
       // Mark as done processing
@@ -345,15 +424,19 @@ io.on("connection", (socket) => {
     }
 
     // Log basic info about the received audio
-    console.log("Received audio data:",
-      typeof data.audio === 'string' ? `${data.audio.length} bytes` : 'invalid format');
+    console.log(
+      "Received audio data:",
+      typeof data.audio === "string"
+        ? `${data.audio.length} bytes`
+        : "invalid format"
+    );
 
     // Skip processing if the audio data is too small
-    if (typeof data.audio === 'string' && data.audio.length < 500) {
+    if (typeof data.audio === "string" && data.audio.length < 500) {
       console.warn("Audio data too small, skipping");
       socket.emit("ai-response", {
         text: "I couldn't hear anything. Could you please try speaking again?",
-        audio: null
+        audio: null,
       });
       return;
     }
@@ -363,25 +446,34 @@ io.on("connection", (socket) => {
 
     // If the queue is already at max capacity, remove the oldest item
     if (conversationState.queue.length >= MAX_QUEUE_SIZE) {
-      console.warn(`Queue at maximum capacity (${MAX_QUEUE_SIZE}), removing oldest item`);
+      console.warn(
+        `Queue at maximum capacity (${MAX_QUEUE_SIZE}), removing oldest item`
+      );
       conversationState.queue.shift(); // Remove the oldest item
     }
 
     // Add to queue
     conversationState.queue.push(data);
-    console.log(`Added to queue. Queue length: ${conversationState.queue.length}`);
+    console.log(
+      `Added to queue. Queue length: ${conversationState.queue.length}`
+    );
 
     // If not currently processing, start processing the queue
     if (!conversationState.isProcessing) {
       processNextInQueue();
     } else {
-      console.log("Already processing, item will be processed when current processing completes");
+      console.log(
+        "Already processing, item will be processed when current processing completes"
+      );
     }
 
     // Set a timeout to clear the queue if it gets stuck
     const QUEUE_TIMEOUT = 30000; // 30 seconds
     setTimeout(() => {
-      if (conversationState.isProcessing && conversationState.queue.length > 0) {
+      if (
+        conversationState.isProcessing &&
+        conversationState.queue.length > 0
+      ) {
         console.warn("Processing timeout reached, resetting processing state");
         conversationState.isProcessing = false;
         processNextInQueue();
@@ -410,7 +502,7 @@ io.on("connection", (socket) => {
     conversationState.isProcessing = false;
 
     // Send a final message to the client before disconnecting
-    socket.emit('call-ended', { message: 'Call ended by user' });
+    socket.emit("call-ended", { message: "Call ended by user" });
 
     // Disconnect the socket
     socket.disconnect();

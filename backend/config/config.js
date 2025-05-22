@@ -51,4 +51,21 @@ module.exports = {
   firebase: {
     credentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS,
   },
+
+  // JWT configuration
+  jwt: {
+    secret:
+      process.env.JWT_SECRET ||
+      "your-default-jwt-secret-should-be-changed-in-production",
+    expiresIn: "7d", // Token expiration time
+  },
+
+  // Security settings
+  security: {
+    bcryptSaltRounds: 10,
+    rateLimiting: {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // limit each IP to 100 requests per windowMs
+    },
+  },
 };

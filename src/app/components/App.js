@@ -1,13 +1,7 @@
 import React from "react";
 import Link from "next/link";
 
-// Define an interface for props
-interface AppProps {
-  name: string;
-  image: string;
-}
-
-const App: React.FC<AppProps> = ({ name, image }) => {
+const App = ({ name, image }) => {
   return (
     <div className="grid place-items-center">
       <div className="grid place-items-center">

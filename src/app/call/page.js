@@ -1,8 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import VoiceCall from '@/components/VoiceCall';
 import { Phone } from 'lucide-react';
 
@@ -17,7 +16,7 @@ export default function CallPage() {
 
   const [isCallActive, setIsCallActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
   // Start the call
   const startCall = async () => {

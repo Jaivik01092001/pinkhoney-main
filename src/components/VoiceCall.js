@@ -1,43 +1,51 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
+import { PhoneOff, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 
-interface VoiceCallProps {
-  name: string;
-  personality: string;
-  image: string;
-  userId?: string;
-  onEndCall: () => void;
-}
+// Define call status constants
+const CallStatus = {
+  CONNECTING: "connecting",
+  CONNECTED: "connected",
+  ENDED: "ended",
+  ERROR: "error",
+};
 
-enum CallStatus {
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  ENDED = 'ended',
-  ERROR = 'error'
-}
+const VoiceCall = ({ name, personality, image, onEndCall }) => {
+  const [callStatus, setCallStatus] = useState(CallStatus.CONNECTING);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVolumeMuted, setIsVolumeMuted] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("Connecting...");
+  const [transcript, setTranscript] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [isListening, setIsListening] = useState(false);
 
-const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCall }) => {
-  const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.CONNECTING);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [isVolumeMuted, setIsVolumeMuted] = useState<boolean>(false);
-  const [statusMessage, setStatusMessage] = useState<string>('Connecting...');
-  const [transcript, setTranscript] = useState<string>('');
-  const [aiResponse, setAiResponse] = useState<string>('');
-  const [isListening, setIsListening] = useState<boolean>(false);
-
-  const socketRef = useRef<Socket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const socketRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const streamRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   // Store available speech synthesis voices
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voices, setVoices] = useState([]);
+
+  // Track conversation state
+  const isAISpeakingRef = useRef(false);
+  const waitingForUserInputRef = useRef(false);
+  const conversationTurnRef = useRef(0);
+
+  // Track audio processing state
+  const lastAudioSendTimeRef = useRef(0);
+  const processingAudioRef = useRef(false);
+  const MIN_AUDIO_INTERVAL_MS = 2000; // Minimum 2 seconds between audio sends
+  const lastTranscriptRef = useRef(""); // Track the last transcript to avoid duplicates
+  const silenceDetectionTimeoutRef = useRef(null);
+  const audioBufferRef = useRef([]); // Buffer to accumulate audio chunks
+  const MAX_BUFFER_SIZE = 3; // Maximum number of chunks to accumulate
+  const audioSendTimeoutRef = useRef(null);
 
   // Load speech synthesis voices when available
   useEffect(() => {
-    if ('speechSynthesis' in window) {
+    if ("speechSynthesis" in window) {
       // Get voices immediately if available
       const availableVoices = window.speechSynthesis.getVoices();
       if (availableVoices.length > 0) {
@@ -53,7 +61,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     }
 
     return () => {
-      if ('speechSynthesis' in window) {
+      if ("speechSynthesis" in window) {
         window.speechSynthesis.onvoiceschanged = null;
       }
     };
@@ -64,31 +72,35 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     const initializeCall = async () => {
       try {
         // Initialize Socket.IO connection with improved settings
-        socketRef.current = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080', {
-          reconnection: true,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          timeout: 20000,
-          autoConnect: true,
-          transports: ['websocket', 'polling']
-        });
+        socketRef.current = io(
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080",
+          {
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            autoConnect: true,
+            transports: ["websocket", "polling"],
+          }
+        );
 
         // Set up socket event listeners
-        socketRef.current.on('connect', handleSocketConnect);
-        socketRef.current.on('ai-response', handleAIResponse);
-        socketRef.current.on('error', handleSocketError);
-        socketRef.current.on('disconnect', handleSocketDisconnect);
-        socketRef.current.on('connect_error', handleConnectionError);
-        socketRef.current.on('reconnect', handleReconnect);
-        socketRef.current.on('reconnect_attempt', handleReconnectAttempt);
-        socketRef.current.on('reconnect_error', handleReconnectError);
-        socketRef.current.on('reconnect_failed', handleReconnectFailed);
-        socketRef.current.on('heartbeat', handleHeartbeat);
-        socketRef.current.on('call-ended', handleCallEnded);
+        socketRef.current.on("connect", handleSocketConnect);
+        socketRef.current.on("ai-response", handleAIResponse);
+        socketRef.current.on("error", handleSocketError);
+        socketRef.current.on("disconnect", handleSocketDisconnect);
+        socketRef.current.on("connect_error", handleConnectionError);
+        socketRef.current.on("reconnect", handleReconnect);
+        socketRef.current.on("reconnect_attempt", handleReconnectAttempt);
+        socketRef.current.on("reconnect_error", handleReconnectError);
+        socketRef.current.on("reconnect_failed", handleReconnectFailed);
+        socketRef.current.on("heartbeat", handleHeartbeat);
+        socketRef.current.on("call-ended", handleCallEnded);
 
         // Initialize audio context
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
 
         // Request microphone access with optimized settings for speech recognition
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -97,8 +109,8 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
             noiseSuppression: true,
             autoGainControl: true,
             channelCount: 1,
-            sampleRate: 44100 // Higher sample rate for better quality
-          }
+            sampleRate: 44100, // Higher sample rate for better quality
+          },
         });
         streamRef.current = stream;
 
@@ -109,31 +121,31 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         // We'll prioritize formats that are known to work well with speech recognition
         const mimeTypes = [
           // PCM audio is the most reliable for speech recognition
-          'audio/webm;codecs=pcm',
+          "audio/webm;codecs=pcm",
           // Opus codec provides good quality and compression
-          'audio/webm;codecs=opus',
+          "audio/webm;codecs=opus",
           // Standard WebM format
-          'audio/webm',
+          "audio/webm",
           // Other formats as fallbacks
-          'audio/ogg;codecs=opus',
-          'audio/ogg',
-          'audio/mp3',
-          'audio/mpeg',
-          'audio/wav'
+          "audio/ogg;codecs=opus",
+          "audio/ogg",
+          "audio/mp3",
+          "audio/mpeg",
+          "audio/wav",
         ];
 
         // Find the first supported MIME type
-        let selectedMimeType = '';
+        let selectedMimeType = "";
 
         // First check if PCM in WebM is supported (best quality)
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')) {
-          selectedMimeType = 'audio/webm;codecs=pcm';
-          console.log('Using PCM audio format (highest quality)');
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=pcm")) {
+          selectedMimeType = "audio/webm;codecs=pcm";
+          console.log("Using PCM audio format (highest quality)");
         }
         // Then check for WAV
-        else if (MediaRecorder.isTypeSupported('audio/wav')) {
-          selectedMimeType = 'audio/wav';
-          console.log('Using WAV audio format');
+        else if (MediaRecorder.isTypeSupported("audio/wav")) {
+          selectedMimeType = "audio/wav";
+          console.log("Using WAV audio format");
         }
         // Otherwise, try other formats
         else {
@@ -151,20 +163,22 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         }
 
         // Configure MediaRecorder with optimal settings for speech
-        const options = selectedMimeType ?
-          {
-            mimeType: selectedMimeType,
-            audioBitsPerSecond: 256000 // Higher bitrate for better quality and transcription
-          } :
-          undefined;
+        const options = selectedMimeType
+          ? {
+              mimeType: selectedMimeType,
+              audioBitsPerSecond: 256000, // Higher bitrate for better quality and transcription
+            }
+          : undefined;
 
         // Create MediaRecorder with the selected options or default
-        let mediaRecorder: MediaRecorder;
+        let mediaRecorder;
         try {
           mediaRecorder = new MediaRecorder(stream, options);
           console.log("Using audio format:", mediaRecorder.mimeType);
         } catch (e) {
-          console.warn("Error creating MediaRecorder with selected format, using default format");
+          console.warn(
+            "Error creating MediaRecorder with selected format, using default format"
+          );
           mediaRecorder = new MediaRecorder(stream);
           console.log("Using default audio format:", mediaRecorder.mimeType);
         }
@@ -181,11 +195,13 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
         // Update call status
         setCallStatus(CallStatus.CONNECTED);
-        setStatusMessage('Connected');
+        setStatusMessage("Connected");
       } catch (error) {
-        console.error('Error initializing call:', error);
+        console.error("Error initializing call:", error);
         setCallStatus(CallStatus.ERROR);
-        setStatusMessage('Failed to initialize call. Please check your microphone permissions.');
+        setStatusMessage(
+          "Failed to initialize call. Please check your microphone permissions."
+        );
       }
     };
 
@@ -199,9 +215,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
   // Handle socket connection
   const handleSocketConnect = () => {
-    console.log('Socket connected');
+    console.log("Socket connected");
     setCallStatus(CallStatus.CONNECTED);
-    setStatusMessage('Connected');
+    setStatusMessage("Connected");
   };
 
   // Start listening for user speech
@@ -219,7 +235,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     setIsListening(true);
 
     // Reset transcript display to show we're waiting for new input
-    setTranscript('');
+    setTranscript("");
 
     // Show status message
     setStatusMessage("Please speak now");
@@ -227,23 +243,18 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     console.log("Ready to receive audio from MediaRecorder");
   };
 
-  // Track conversation state
-  const isAISpeakingRef = useRef<boolean>(false);
-  const waitingForUserInputRef = useRef<boolean>(false);
-
-  // Track if we should queue audio during AI speech (always true in this implementation)
-
-  // Track conversation turn
-  const conversationTurnRef = useRef<number>(0);
-
   // Helper function to process queued audio
   const processQueuedAudio = () => {
     // Check if we have any audio in the buffer that was recorded during AI speech
     if (audioBufferRef.current.length > 0) {
-      console.log(`Found ${audioBufferRef.current.length} audio chunks in buffer, processing them`);
+      console.log(
+        `Found ${audioBufferRef.current.length} audio chunks in buffer, processing them`
+      );
 
       // Process the queued audio by creating a combined blob and sending it
-      const combinedBlob = new Blob(audioBufferRef.current, { type: audioBufferRef.current[0].type });
+      const combinedBlob = new Blob(audioBufferRef.current, {
+        type: audioBufferRef.current[0].type,
+      });
 
       // Convert the combined blob to array buffer and send it
       const reader = new FileReader();
@@ -252,7 +263,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         if (socketRef.current && socketRef.current.connected) {
           try {
             // Get the result as ArrayBuffer
-            const arrayBuffer = reader.result as ArrayBuffer;
+            const arrayBuffer = reader.result;
 
             if (!arrayBuffer) {
               console.error("Failed to read queued audio data");
@@ -262,7 +273,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
             }
 
             // Convert ArrayBuffer to Base64 string for transmission
-            let binary = '';
+            let binary = "";
             const bytes = new Uint8Array(arrayBuffer);
             const len = bytes.byteLength;
 
@@ -272,21 +283,31 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
             const base64Audio = btoa(binary);
 
-            console.log(`Sending queued audio data (${base64Audio.length} bytes)`);
+            console.log(
+              `Sending queued audio data (${base64Audio.length} bytes)`
+            );
 
             // Send the base64 encoded audio data to the server
             // Use the actual MIME type from the MediaRecorder for better format handling
-            const audioFormat = mediaRecorderRef.current?.mimeType.includes('webm') ? 'webm' :
-                               mediaRecorderRef.current?.mimeType.includes('ogg') ? 'ogg' :
-                               mediaRecorderRef.current?.mimeType.includes('mp3') ? 'mp3' : 'wav';
+            const audioFormat = mediaRecorderRef.current?.mimeType.includes(
+              "webm"
+            )
+              ? "webm"
+              : mediaRecorderRef.current?.mimeType.includes("ogg")
+              ? "ogg"
+              : mediaRecorderRef.current?.mimeType.includes("mp3")
+              ? "mp3"
+              : "wav";
 
-            console.log(`Sending queued audio with format: ${audioFormat} based on MIME type: ${mediaRecorderRef.current?.mimeType}`);
+            console.log(
+              `Sending queued audio with format: ${audioFormat} based on MIME type: ${mediaRecorderRef.current?.mimeType}`
+            );
 
-            socketRef.current.emit('voice-data', {
+            socketRef.current.emit("voice-data", {
               audio: base64Audio,
               audio_format: audioFormat,
               companion_name: name,
-              personality: personality
+              personality: personality,
             });
 
             // Clear the audio buffer after sending
@@ -326,14 +347,16 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
   };
 
   // Handle AI response from server
-  const handleAIResponse = (data: { text: string, audio: ArrayBuffer | null, conversationTurn?: number, userTranscript?: string }) => {
+  const handleAIResponse = (data) => {
     console.log("Received AI response:", data.text);
     setAiResponse(data.text);
 
     // Update conversation turn if provided
     if (data.conversationTurn) {
       conversationTurnRef.current = data.conversationTurn;
-      console.log(`Conversation turn updated to: ${conversationTurnRef.current}`);
+      console.log(
+        `Conversation turn updated to: ${conversationTurnRef.current}`
+      );
     }
 
     // Set the transcript from the server response if provided
@@ -353,9 +376,6 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     // Set listening state to false when AI is speaking
     setIsListening(false);
 
-    // Save any existing audio buffer for processing after AI finishes speaking
-    // We don't clear the buffer here anymore, as we want to keep any audio recorded during AI speech
-
     // Reset processing flag to allow new audio to be processed after AI finishes speaking
     processingAudioRef.current = false;
 
@@ -368,15 +388,41 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     // Play audio if volume is not muted and audio data is available
     if (!isVolumeMuted && audioContextRef.current && data.audio) {
       try {
-        audioContextRef.current.decodeAudioData(data.audio, (buffer) => {
-          const source = audioContextRef.current!.createBufferSource();
-          source.buffer = buffer;
-          source.connect(audioContextRef.current!.destination);
-          source.start(0);
+        audioContextRef.current.decodeAudioData(
+          data.audio,
+          (buffer) => {
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContextRef.current.destination);
+            source.start(0);
 
-          // When audio playback ends, mark AI as done speaking and process any queued audio
-          source.onended = () => {
-            console.log("Audio playback ended, checking for queued audio");
+            // When audio playback ends, mark AI as done speaking and process any queued audio
+            source.onended = () => {
+              console.log("Audio playback ended, checking for queued audio");
+              isAISpeakingRef.current = false;
+              waitingForUserInputRef.current = true;
+
+              // Process any queued audio first
+              const audioProcessed = processQueuedAudio();
+
+              // If no audio was processed, start listening for new input
+              if (!audioProcessed) {
+                console.log(
+                  "No queued audio found, starting to listen for new input"
+                );
+
+                // Start listening after a very short delay to avoid picking up any residual sounds
+                // Reduced delay for better responsiveness
+                setTimeout(() => {
+                  startListening();
+                  console.log("Started listening for user response");
+                }, 500);
+              }
+            };
+          },
+          (error) => {
+            console.error("Error decoding audio data:", error);
+            // Mark AI as done speaking even if there was an error
             isAISpeakingRef.current = false;
             waitingForUserInputRef.current = true;
 
@@ -385,36 +431,18 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
             // If no audio was processed, start listening for new input
             if (!audioProcessed) {
-              console.log("No queued audio found, starting to listen for new input");
+              console.log(
+                "No queued audio found, starting to listen for new input"
+              );
 
-              // Start listening after a very short delay to avoid picking up any residual sounds
-              // Reduced delay for better responsiveness
+              // Start listening after a short delay
               setTimeout(() => {
                 startListening();
-                console.log("Started listening for user response");
+                console.log("Started listening for user response after error");
               }, 500);
             }
-          };
-        }, (error) => {
-          console.error("Error decoding audio data:", error);
-          // Mark AI as done speaking even if there was an error
-          isAISpeakingRef.current = false;
-          waitingForUserInputRef.current = true;
-
-          // Process any queued audio first
-          const audioProcessed = processQueuedAudio();
-
-          // If no audio was processed, start listening for new input
-          if (!audioProcessed) {
-            console.log("No queued audio found, starting to listen for new input");
-
-            // Start listening after a short delay
-            setTimeout(() => {
-              startListening();
-              console.log("Started listening for user response after error");
-            }, 500);
           }
-        });
+        );
       } catch (error) {
         console.error("Error processing audio response:", error);
         // Mark AI as done speaking even if there was an error
@@ -426,7 +454,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
         // If no audio was processed, start listening for new input
         if (!audioProcessed) {
-          console.log("No queued audio found, starting to listen for new input");
+          console.log(
+            "No queued audio found, starting to listen for new input"
+          );
 
           // Start listening after a short delay
           setTimeout(() => {
@@ -436,10 +466,12 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         }
       }
     } else if (!data.audio) {
-      console.log("No audio data received from server, using browser speech synthesis");
+      console.log(
+        "No audio data received from server, using browser speech synthesis"
+      );
 
       // Use browser's speech synthesis as fallback if no audio data
-      if (!isVolumeMuted && 'speechSynthesis' in window) {
+      if (!isVolumeMuted && "speechSynthesis" in window) {
         try {
           // Make sure any previous speech is canceled
           window.speechSynthesis.cancel();
@@ -449,20 +481,21 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
             const utterance = new SpeechSynthesisUtterance(data.text);
 
             // Set speech properties for a more natural sound
-            utterance.rate = 1.0;  // Normal speed
+            utterance.rate = 1.0; // Normal speed
             utterance.pitch = 1.1; // Slightly higher pitch for female voice
             utterance.volume = 1.0; // Full volume
 
             // Try to use a female voice if available
-            const femaleVoice = voices.find(voice =>
-              voice.name.toLowerCase().includes('female') ||
-              voice.name.includes('nova') ||
-              voice.name.includes('samantha') ||
-              voice.name.includes('lisa') ||
-              voice.name.includes('victoria') ||
-              voice.name.includes('karen') ||
-              voice.name.includes('moira') ||
-              voice.name.includes('tessa')
+            const femaleVoice = voices.find(
+              (voice) =>
+                voice.name.toLowerCase().includes("female") ||
+                voice.name.includes("nova") ||
+                voice.name.includes("samantha") ||
+                voice.name.includes("lisa") ||
+                voice.name.includes("victoria") ||
+                voice.name.includes("karen") ||
+                voice.name.includes("moira") ||
+                voice.name.includes("tessa")
             );
 
             if (femaleVoice) {
@@ -490,7 +523,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
               // If no audio was processed, start listening for new input
               if (!audioProcessed) {
-                console.log("No queued audio found, starting to listen for new input");
+                console.log(
+                  "No queued audio found, starting to listen for new input"
+                );
 
                 // Start listening after a short delay
                 setTimeout(() => {
@@ -507,8 +542,10 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
               waitingForUserInputRef.current = true;
 
               // If speech is interrupted, try again with a simpler approach
-              if (e.error === 'interrupted') {
-                console.log("Speech was interrupted, trying again with default settings");
+              if (e.error === "interrupted") {
+                console.log(
+                  "Speech was interrupted, trying again with default settings"
+                );
                 const simpleUtterance = new SpeechSynthesisUtterance(data.text);
                 simpleUtterance.onend = () => {
                   setTimeout(() => {
@@ -551,7 +588,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
         // If no audio was processed, start listening for new input
         if (!audioProcessed) {
-          console.log("No queued audio found, starting to listen for new input");
+          console.log(
+            "No queued audio found, starting to listen for new input"
+          );
 
           // Start listening after a short delay
           setTimeout(() => {
@@ -564,26 +603,30 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
   };
 
   // Handle socket error
-  const handleSocketError = (error: { message: string }) => {
-    console.error('Socket error:', error);
+  const handleSocketError = (error) => {
+    console.error("Socket error:", error);
     setStatusMessage(`Error: ${error.message}`);
     setCallStatus(CallStatus.ERROR);
 
     // Display error message in the transcript area
-    setAiResponse(`Sorry, there was an error: ${error.message}. Please try again.`);
+    setAiResponse(
+      `Sorry, there was an error: ${error.message}. Please try again.`
+    );
 
     // Use speech synthesis to announce the error
-    if ('speechSynthesis' in window && !isVolumeMuted) {
+    if ("speechSynthesis" in window && !isVolumeMuted) {
       try {
         // Make sure any previous speech is canceled
         window.speechSynthesis.cancel();
 
         // Small delay to ensure previous speech is fully canceled
         setTimeout(() => {
-          const utterance = new SpeechSynthesisUtterance(`Sorry, there was an error. Please try again.`);
+          const utterance = new SpeechSynthesisUtterance(
+            `Sorry, there was an error. Please try again.`
+          );
 
           // Use simpler settings for error messages
-          utterance.rate = 0.9;  // Slightly slower for clarity
+          utterance.rate = 0.9; // Slightly slower for clarity
           utterance.volume = 1.0; // Full volume
 
           window.speechSynthesis.speak(utterance);
@@ -596,16 +639,16 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
   // Handle socket disconnection
   const handleSocketDisconnect = () => {
-    console.log('Socket disconnected');
-    setStatusMessage('Connection lost. Attempting to reconnect...');
+    console.log("Socket disconnected");
+    setStatusMessage("Connection lost. Attempting to reconnect...");
 
     // Only set call as ended if we manually ended the call
     // Otherwise, try to reconnect
     if (callStatus === CallStatus.ENDED) {
-      setStatusMessage('Call ended');
+      setStatusMessage("Call ended");
     } else {
       setCallStatus(CallStatus.CONNECTING);
-      setStatusMessage('Connection lost. Attempting to reconnect...');
+      setStatusMessage("Connection lost. Attempting to reconnect...");
 
       // Try to reconnect if socket exists
       if (socketRef.current) {
@@ -619,74 +662,69 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
   };
 
   // Handle connection error
-  const handleConnectionError = (error: Error) => {
-    console.error('Connection error:', error);
+  const handleConnectionError = (error) => {
+    console.error("Connection error:", error);
     setCallStatus(CallStatus.CONNECTING);
-    setStatusMessage('Connection error. Attempting to reconnect...');
+    setStatusMessage("Connection error. Attempting to reconnect...");
   };
 
   // Handle successful reconnection
-  const handleReconnect = (attemptNumber: number) => {
+  const handleReconnect = (attemptNumber) => {
     console.log(`Reconnected after ${attemptNumber} attempts`);
     setCallStatus(CallStatus.CONNECTED);
-    setStatusMessage('Reconnected');
+    setStatusMessage("Reconnected");
 
     // Reset processing state to allow new audio to be processed
     processingAudioRef.current = false;
   };
 
   // Handle reconnection attempt
-  const handleReconnectAttempt = (attemptNumber: number) => {
+  const handleReconnectAttempt = (attemptNumber) => {
     console.log(`Reconnection attempt ${attemptNumber}`);
     setStatusMessage(`Reconnecting... (Attempt ${attemptNumber})`);
   };
 
   // Handle reconnection error
-  const handleReconnectError = (error: Error) => {
-    console.error('Reconnection error:', error);
-    setStatusMessage('Reconnection error. Trying again...');
+  const handleReconnectError = (error) => {
+    console.error("Reconnection error:", error);
+    setStatusMessage("Reconnection error. Trying again...");
   };
 
   // Handle reconnection failure
   const handleReconnectFailed = () => {
-    console.error('Failed to reconnect');
+    console.error("Failed to reconnect");
     setCallStatus(CallStatus.ERROR);
-    setStatusMessage('Failed to reconnect. Please try again later.');
+    setStatusMessage("Failed to reconnect. Please try again later.");
   };
 
   // Handle heartbeat from server
-  const handleHeartbeat = (data: { timestamp: number }) => {
-    console.log(`Heartbeat received: ${new Date(data.timestamp).toISOString()}`);
+  const handleHeartbeat = (data) => {
+    console.log(
+      `Heartbeat received: ${new Date(data.timestamp).toISOString()}`
+    );
     // Reset processing flag if it's been stuck for too long
     const now = Date.now();
     const PROCESSING_TIMEOUT = 10000; // 10 seconds
 
-    if (processingAudioRef.current && now - lastAudioSendTimeRef.current > PROCESSING_TIMEOUT) {
+    if (
+      processingAudioRef.current &&
+      now - lastAudioSendTimeRef.current > PROCESSING_TIMEOUT
+    ) {
       console.log("Processing flag has been stuck for too long, resetting");
       processingAudioRef.current = false;
     }
   };
 
   // Handle call ended event from server
-  const handleCallEnded = (data: { message: string }) => {
+  const handleCallEnded = (data) => {
     console.log(`Call ended: ${data.message}`);
     setCallStatus(CallStatus.ENDED);
-    setStatusMessage('Call ended');
+    setStatusMessage("Call ended");
     onEndCall();
   };
 
-  // Track audio processing state
-  const lastAudioSendTimeRef = useRef<number>(0);
-  const processingAudioRef = useRef<boolean>(false);
-  const MIN_AUDIO_INTERVAL_MS = 2000; // Minimum 2 seconds between audio sends - reduced to improve responsiveness
-  const lastTranscriptRef = useRef<string>(''); // Track the last transcript to avoid duplicates
-  const silenceDetectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const audioBufferRef = useRef<Blob[]>([]); // Buffer to accumulate audio chunks
-  const MAX_BUFFER_SIZE = 3; // Maximum number of chunks to accumulate
-  const audioSendTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   // Handle audio data from MediaRecorder
-  const handleDataAvailable = (event: BlobEvent) => {
+  const handleDataAvailable = (event) => {
     if (event.data.size > 0 && socketRef.current && !isMuted) {
       console.log("Audio data available, size:", event.data.size);
 
@@ -694,7 +732,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         // Skip very small audio data (likely silence or background noise)
         // Increased minimum size to avoid processing tiny audio chunks
         if (event.data.size < 5000) {
-          console.warn("Audio data too small, likely silence or noise - skipping");
+          console.warn(
+            "Audio data too small, likely silence or noise - skipping"
+          );
           return;
         }
 
@@ -731,7 +771,10 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
         // Implement more aggressive debouncing to prevent sending audio too frequently
         const now = Date.now();
-        if (now - lastAudioSendTimeRef.current < MIN_AUDIO_INTERVAL_MS || processingAudioRef.current) {
+        if (
+          now - lastAudioSendTimeRef.current < MIN_AUDIO_INTERVAL_MS ||
+          processingAudioRef.current
+        ) {
           console.log("Debouncing audio send or already processing, skipping");
           return;
         }
@@ -761,7 +804,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         }
 
         // Combine all audio chunks into a single blob
-        const combinedBlob = new Blob(audioBufferRef.current, { type: event.data.type });
+        const combinedBlob = new Blob(audioBufferRef.current, {
+          type: event.data.type,
+        });
 
         // Convert the combined blob to array buffer
         const reader = new FileReader();
@@ -770,7 +815,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
           if (socketRef.current) {
             try {
               // Get the result as ArrayBuffer
-              const arrayBuffer = reader.result as ArrayBuffer;
+              const arrayBuffer = reader.result;
 
               if (!arrayBuffer) {
                 console.error("Failed to read audio data");
@@ -781,7 +826,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
               }
 
               // Convert ArrayBuffer to Base64 string for transmission
-              let binary = '';
+              let binary = "";
               const bytes = new Uint8Array(arrayBuffer);
               const len = bytes.byteLength;
 
@@ -797,17 +842,25 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
               if (socketRef.current.connected) {
                 // Send the base64 encoded audio data to the server
                 // Use the actual MIME type from the MediaRecorder for better format handling
-                const audioFormat = mediaRecorderRef.current?.mimeType.includes('webm') ? 'webm' :
-                                   mediaRecorderRef.current?.mimeType.includes('ogg') ? 'ogg' :
-                                   mediaRecorderRef.current?.mimeType.includes('mp3') ? 'mp3' : 'wav';
+                const audioFormat = mediaRecorderRef.current?.mimeType.includes(
+                  "webm"
+                )
+                  ? "webm"
+                  : mediaRecorderRef.current?.mimeType.includes("ogg")
+                  ? "ogg"
+                  : mediaRecorderRef.current?.mimeType.includes("mp3")
+                  ? "mp3"
+                  : "wav";
 
-                console.log(`Sending audio with format: ${audioFormat} based on MIME type: ${mediaRecorderRef.current?.mimeType}`);
+                console.log(
+                  `Sending audio with format: ${audioFormat} based on MIME type: ${mediaRecorderRef.current?.mimeType}`
+                );
 
-                socketRef.current.emit('voice-data', {
+                socketRef.current.emit("voice-data", {
                   audio: base64Audio,
                   audio_format: audioFormat,
                   companion_name: name,
-                  personality: personality
+                  personality: personality,
                 });
 
                 // Clear the audio buffer after sending
@@ -882,7 +935,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     setIsMuted(newMuteState);
 
     if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(track => {
+      streamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = !newMuteState; // When muted is true, tracks should be disabled
       });
     }
@@ -896,18 +949,21 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
   // End call
   const endCall = () => {
     if (socketRef.current) {
-      socketRef.current.emit('end-call');
+      socketRef.current.emit("end-call");
     }
     cleanupCall();
     setCallStatus(CallStatus.ENDED);
-    setStatusMessage('Call ended');
+    setStatusMessage("Call ended");
     onEndCall();
   };
 
   // Clean up resources
   const cleanupCall = () => {
     // Stop MediaRecorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
 
@@ -936,11 +992,11 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
 
     // Stop audio tracks
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
     }
 
     // Close audio context
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       try {
         audioContextRef.current.close();
       } catch (error) {
@@ -966,7 +1022,7 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     processingAudioRef.current = false;
 
     // Cancel any ongoing speech synthesis
-    if ('speechSynthesis' in window) {
+    if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
 
@@ -980,27 +1036,33 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
     <div className="flex flex-col items-center w-full max-w-md mx-auto">
       {/* Call status */}
       <div className="w-full text-center mb-4">
-        <p className={`text-lg font-medium ${
-          callStatus === CallStatus.CONNECTED ? 'text-green-500' :
-          callStatus === CallStatus.CONNECTING ? 'text-yellow-500' :
-          callStatus === CallStatus.ERROR ? 'text-red-500' : 'text-gray-500'
-        }`}>
+        <p
+          className={`text-lg font-medium ${
+            callStatus === CallStatus.CONNECTED
+              ? "text-green-500"
+              : callStatus === CallStatus.CONNECTING
+              ? "text-yellow-500"
+              : callStatus === CallStatus.ERROR
+              ? "text-red-500"
+              : "text-gray-500"
+          }`}
+        >
           {statusMessage}
         </p>
       </div>
 
       {/* Profile image */}
       <div className="relative w-48 h-48 rounded-full overflow-hidden mb-6">
-        <img
-          src={image}
-          alt={name}
-          className="w-full h-full object-cover"
-        />
-        <div className={`absolute bottom-0 right-0 w-6 h-6 rounded-full ${
-          callStatus === CallStatus.CONNECTED ? 'bg-green-500' :
-          callStatus === CallStatus.CONNECTING ? 'bg-yellow-500' :
-          'bg-red-500'
-        }`}></div>
+        <img src={image} alt={name} className="w-full h-full object-cover" />
+        <div
+          className={`absolute bottom-0 right-0 w-6 h-6 rounded-full ${
+            callStatus === CallStatus.CONNECTED
+              ? "bg-green-500"
+              : callStatus === CallStatus.CONNECTING
+              ? "bg-yellow-500"
+              : "bg-red-500"
+          }`}
+        ></div>
       </div>
 
       {/* Name and personality */}
@@ -1008,7 +1070,11 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
       <p className="text-gray-400 mb-8">{personality}</p>
 
       {/* Listening indicator */}
-      <div className={`w-full text-center mb-2 ${isListening ? 'visible' : 'invisible'}`}>
+      <div
+        className={`w-full text-center mb-2 ${
+          isListening ? "visible" : "invisible"
+        }`}
+      >
         <div className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-full">
           <div className="w-3 h-3 bg-white rounded-full mr-2 animate-pulse"></div>
           Listening...
@@ -1034,23 +1100,24 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCa
         {/* Mute button */}
         <button
           onClick={toggleMute}
-          className={`p-4 rounded-full ${isMuted ? 'bg-red-500' : 'bg-gray-700'}`}
+          className={`p-4 rounded-full ${
+            isMuted ? "bg-red-500" : "bg-gray-700"
+          }`}
         >
           {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
         </button>
 
         {/* End call button */}
-        <button
-          onClick={endCall}
-          className="p-4 bg-red-600 rounded-full"
-        >
+        <button onClick={endCall} className="p-4 bg-red-600 rounded-full">
           <PhoneOff size={28} />
         </button>
 
         {/* Volume button */}
         <button
           onClick={toggleVolume}
-          className={`p-4 rounded-full ${isVolumeMuted ? 'bg-red-500' : 'bg-gray-700'}`}
+          className={`p-4 rounded-full ${
+            isVolumeMuted ? "bg-red-500" : "bg-gray-700"
+          }`}
         >
           {isVolumeMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
         </button>

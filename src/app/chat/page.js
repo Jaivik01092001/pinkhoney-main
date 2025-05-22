@@ -1,8 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { FaPaperPlane, FaVolumeUp, FaVolumeMute, FaPhone } from "react-icons/fa";
+import {
+  FaPaperPlane,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaPhone,
+} from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import AudioPlayer from "../../components/AudioPlayer";
 
@@ -32,7 +37,9 @@ function Chat() {
   };
 
   function handle_call() {
-    router.push(`/call?name=${name}&personality=${personality}&image=${image}&user_id=${userId}&email=${email}`);
+    router.push(
+      `/call?name=${name}&personality=${personality}&image=${image}&user_id=${userId}&email=${email}`
+    );
   }
 
   function go_to_home() {
@@ -153,22 +160,27 @@ function Chat() {
       if (!userId && email) {
         try {
           console.log("Fetching user_id for email:", email);
-          const response = await fetch("http://127.0.0.1:8080/api/clerk_sync", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ email }),
-          });
+          const response = await fetch(
+            `${
+              process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080"
+            }/api/clerk_sync`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ email }),
+            }
+          );
 
           const data = await response.json();
           if (data.user_id) {
             console.log("Retrieved user_id:", data.user_id);
             // Update the URL with the user_id without reloading the page
-            if (typeof window !== 'undefined') {
+            if (typeof window !== "undefined") {
               const newUrl = new URL(window.location.href);
-              newUrl.searchParams.set('user_id', data.user_id);
-              window.history.replaceState({}, '', newUrl.toString());
+              newUrl.searchParams.set("user_id", data.user_id);
+              window.history.replaceState({}, "", newUrl.toString());
             }
 
             // Set the user_id in state
@@ -189,15 +201,26 @@ function Chat() {
       if (!userId || !name) return;
 
       try {
-        console.log("Loading chat history for user:", userId, "and companion:", name);
+        console.log(
+          "Loading chat history for user:",
+          userId,
+          "and companion:",
+          name
+        );
         const response = await fetch(
-          `http://127.0.0.1:8080/api/get_chat_history?user_id=${userId}&companion_name=${name}`
+          `${
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080"
+          }/api/get_chat_history?user_id=${userId}&companion_name=${name}`
         );
 
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.messages && data.messages.length > 0) {
-            console.log("Chat history loaded:", data.messages.length, "messages");
+            console.log(
+              "Chat history loaded:",
+              data.messages.length,
+              "messages"
+            );
             setMessages(data.messages);
           } else {
             console.log("No chat history found or empty history");
@@ -241,12 +264,14 @@ function Chat() {
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${message.sender === "user" ? "justify-end" : ""
-                  } mb-4`}
+                className={`flex ${
+                  message.sender === "user" ? "justify-end" : ""
+                } mb-4`}
               >
                 <div
-                  className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
-                    } text-white p-3 rounded-lg max-w-xs`}
+                  className={`${
+                    message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
+                  } text-white p-3 rounded-lg max-w-xs`}
                 >
                   {message.text}
                 </div>
@@ -301,7 +326,9 @@ function Chat() {
 
             {/* Voice Toggle Button */}
             <button
-              className={`text-2xl mr-2 ${voiceEnabled ? 'text-pink-500' : 'text-gray-500'}`}
+              className={`text-2xl mr-2 ${
+                voiceEnabled ? "text-pink-500" : "text-gray-500"
+              }`}
               onClick={toggleVoiceMode}
             >
               {voiceEnabled ? <FaVolumeUp /> : <FaVolumeMute />}

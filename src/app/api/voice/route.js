@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function POST(request: NextRequest) {
+export async function POST(request) {
   try {
     const { companion_name, personality, user_id } = await request.json();
 
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call backend API to initiate voice call
-    const response = await fetch(`${process.env.BACKEND_URL || 'http://localhost:8080'}/api/voice/initiate`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}/api/voice/initiate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
