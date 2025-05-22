@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
 interface VoiceCallProps {
   name: string;
@@ -17,13 +17,14 @@ enum CallStatus {
   ERROR = 'error'
 }
 
-const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId, onEndCall }) => {
+const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, onEndCall }) => {
   const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.CONNECTING);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isVolumeMuted, setIsVolumeMuted] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('Connecting...');
   const [transcript, setTranscript] = useState<string>('');
   const [aiResponse, setAiResponse] = useState<string>('');
+  const [isListening, setIsListening] = useState<boolean>(false);
 
   const socketRef = useRef<Socket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -62,52 +63,63 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
   useEffect(() => {
     const initializeCall = async () => {
       try {
-        // Initialize Socket.IO connection
-        socketRef.current = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080');
+        // Initialize Socket.IO connection with improved settings
+        socketRef.current = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080', {
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          timeout: 20000,
+          autoConnect: true,
+          transports: ['websocket', 'polling']
+        });
 
         // Set up socket event listeners
         socketRef.current.on('connect', handleSocketConnect);
         socketRef.current.on('ai-response', handleAIResponse);
         socketRef.current.on('error', handleSocketError);
         socketRef.current.on('disconnect', handleSocketDisconnect);
+        socketRef.current.on('connect_error', handleConnectionError);
+        socketRef.current.on('reconnect', handleReconnect);
+        socketRef.current.on('reconnect_attempt', handleReconnectAttempt);
+        socketRef.current.on('reconnect_error', handleReconnectError);
+        socketRef.current.on('reconnect_failed', handleReconnectFailed);
+        socketRef.current.on('heartbeat', handleHeartbeat);
+        socketRef.current.on('call-ended', handleCallEnded);
 
         // Initialize audio context
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
 
-        // Request microphone access
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Request microphone access with optimized settings for speech recognition
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 44100 // Higher sample rate for better quality
+          }
+        });
         streamRef.current = stream;
 
-        // Initialize speech recognition if available
-        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-          const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-          recognitionRef.current = new SpeechRecognition();
-          recognitionRef.current.continuous = true;
-          recognitionRef.current.interimResults = true;
-          recognitionRef.current.lang = 'en-US';
-
-          recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-            const transcript = Array.from(event.results)
-              .map(result => result[0].transcript)
-              .join('');
-            setTranscript(transcript);
-          };
-
-          recognitionRef.current.start();
-        }
+        // We're not using browser speech recognition
+        console.log("Using server-side transcription only");
 
         // Initialize MediaRecorder with the most reliable settings for speech recognition
         // We'll prioritize formats that are known to work well with speech recognition
         const mimeTypes = [
           // PCM audio is the most reliable for speech recognition
           'audio/webm;codecs=pcm',
-          'audio/wav',
-          // Fallback to other common formats
+          // Opus codec provides good quality and compression
+          'audio/webm;codecs=opus',
+          // Standard WebM format
+          'audio/webm',
+          // Other formats as fallbacks
           'audio/ogg;codecs=opus',
           'audio/ogg',
           'audio/mp3',
           'audio/mpeg',
-          'audio/webm'
+          'audio/wav'
         ];
 
         // Find the first supported MIME type
@@ -138,11 +150,11 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
           console.log("Using browser default audio format");
         }
 
-        // Configure MediaRecorder with conservative settings for speech
+        // Configure MediaRecorder with optimal settings for speech
         const options = selectedMimeType ?
           {
             mimeType: selectedMimeType,
-            audioBitsPerSecond: 16000 // 16kHz is standard for speech recognition
+            audioBitsPerSecond: 256000 // Higher bitrate for better quality and transcription
           } :
           undefined;
 
@@ -162,9 +174,10 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
         // Set up MediaRecorder event listeners
         mediaRecorder.ondataavailable = handleDataAvailable;
 
-        // Start recording - collect data every 3 seconds for better chunks
-        // Longer chunks provide better context for the speech recognition
-        mediaRecorder.start(3000);
+        // Use a longer interval (10 seconds) to get more complete speech segments
+        // This helps reduce fragmentation and improves transcription accuracy
+        // Longer segments are better for accurate transcription
+        mediaRecorder.start(10000);
 
         // Update call status
         setCallStatus(CallStatus.CONNECTED);
@@ -193,47 +206,163 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
 
   // Start listening for user speech
   const startListening = () => {
-    if (recognitionRef.current) {
-      try {
-        // Stop any existing recognition session
-        recognitionRef.current.stop();
-
-        // Small delay to ensure recognition has fully stopped
-        setTimeout(() => {
-          try {
-            // Start a new recognition session
-            recognitionRef.current?.start();
-            console.log("Started listening for user speech");
-          } catch (error) {
-            console.error("Error starting speech recognition:", error);
-          }
-        }, 100);
-      } catch (error) {
-        console.error("Error stopping speech recognition:", error);
-
-        // Try to start anyway
-        try {
-          recognitionRef.current.start();
-        } catch (startError) {
-          console.error("Error starting speech recognition after failed stop:", startError);
-        }
-      }
+    // Don't start listening if AI is currently speaking
+    if (isAISpeakingRef.current) {
+      console.log("AI is currently speaking, not starting listening");
+      return;
     }
+
+    // Set waiting for user input
+    waitingForUserInputRef.current = true;
+
+    // Set listening state to show visual indicator
+    setIsListening(true);
+
+    // Reset transcript display to show we're waiting for new input
+    setTranscript('');
+
+    // Show status message
+    setStatusMessage("Please speak now");
+
+    console.log("Ready to receive audio from MediaRecorder");
+  };
+
+  // Track conversation state
+  const isAISpeakingRef = useRef<boolean>(false);
+  const waitingForUserInputRef = useRef<boolean>(false);
+
+  // Track if we should queue audio during AI speech (always true in this implementation)
+
+  // Track conversation turn
+  const conversationTurnRef = useRef<number>(0);
+
+  // Helper function to process queued audio
+  const processQueuedAudio = () => {
+    // Check if we have any audio in the buffer that was recorded during AI speech
+    if (audioBufferRef.current.length > 0) {
+      console.log(`Found ${audioBufferRef.current.length} audio chunks in buffer, processing them`);
+
+      // Process the queued audio by creating a combined blob and sending it
+      const combinedBlob = new Blob(audioBufferRef.current, { type: audioBufferRef.current[0].type });
+
+      // Convert the combined blob to array buffer and send it
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        if (socketRef.current && socketRef.current.connected) {
+          try {
+            // Get the result as ArrayBuffer
+            const arrayBuffer = reader.result as ArrayBuffer;
+
+            if (!arrayBuffer) {
+              console.error("Failed to read queued audio data");
+              // Clear the audio buffer
+              audioBufferRef.current = [];
+              return;
+            }
+
+            // Convert ArrayBuffer to Base64 string for transmission
+            let binary = '';
+            const bytes = new Uint8Array(arrayBuffer);
+            const len = bytes.byteLength;
+
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+
+            const base64Audio = btoa(binary);
+
+            console.log(`Sending queued audio data (${base64Audio.length} bytes)`);
+
+            // Send the base64 encoded audio data to the server
+            // Use the actual MIME type from the MediaRecorder for better format handling
+            const audioFormat = mediaRecorderRef.current?.mimeType.includes('webm') ? 'webm' :
+                               mediaRecorderRef.current?.mimeType.includes('ogg') ? 'ogg' :
+                               mediaRecorderRef.current?.mimeType.includes('mp3') ? 'mp3' : 'wav';
+
+            console.log(`Sending queued audio with format: ${audioFormat} based on MIME type: ${mediaRecorderRef.current?.mimeType}`);
+
+            socketRef.current.emit('voice-data', {
+              audio: base64Audio,
+              audio_format: audioFormat,
+              companion_name: name,
+              personality: personality
+            });
+
+            // Clear the audio buffer after sending
+            audioBufferRef.current = [];
+
+            // Set processing flag to prevent sending more audio too quickly
+            processingAudioRef.current = true;
+            lastAudioSendTimeRef.current = Date.now();
+
+            // Reset processing flag after a delay (reduced for better responsiveness)
+            audioSendTimeoutRef.current = setTimeout(() => {
+              console.log("Resetting processing flag after queued audio send");
+              processingAudioRef.current = false;
+            }, 2000);
+          } catch (error) {
+            console.error("Error processing queued audio:", error);
+            audioBufferRef.current = [];
+          }
+        } else {
+          console.warn("Socket not connected, cannot send queued audio");
+          audioBufferRef.current = [];
+        }
+      };
+
+      reader.onerror = () => {
+        console.error("Error reading queued audio data");
+        audioBufferRef.current = [];
+      };
+
+      // Read the combined blob
+      reader.readAsArrayBuffer(combinedBlob);
+
+      return true; // Audio was processed
+    }
+
+    return false; // No audio to process
   };
 
   // Handle AI response from server
-  const handleAIResponse = (data: { text: string, audio: ArrayBuffer | null }) => {
+  const handleAIResponse = (data: { text: string, audio: ArrayBuffer | null, conversationTurn?: number, userTranscript?: string }) => {
     console.log("Received AI response:", data.text);
     setAiResponse(data.text);
 
-    // Stop listening while AI is speaking to prevent feedback
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-        console.log("Stopped listening while AI is speaking");
-      } catch (error) {
-        console.error("Error stopping speech recognition:", error);
-      }
+    // Update conversation turn if provided
+    if (data.conversationTurn) {
+      conversationTurnRef.current = data.conversationTurn;
+      console.log(`Conversation turn updated to: ${conversationTurnRef.current}`);
+    }
+
+    // Set the transcript from the server response if provided
+    if (data.userTranscript) {
+      console.log(`Setting transcript from server: "${data.userTranscript}"`);
+      setTranscript(data.userTranscript);
+    }
+
+    // Store the transcript to avoid processing duplicate responses
+    if (data.text) {
+      lastTranscriptRef.current = data.text;
+    }
+
+    // Set AI as speaking
+    isAISpeakingRef.current = true;
+
+    // Set listening state to false when AI is speaking
+    setIsListening(false);
+
+    // Save any existing audio buffer for processing after AI finishes speaking
+    // We don't clear the buffer here anymore, as we want to keep any audio recorded during AI speech
+
+    // Reset processing flag to allow new audio to be processed after AI finishes speaking
+    processingAudioRef.current = false;
+
+    // Clear any existing timeouts
+    if (audioSendTimeoutRef.current) {
+      clearTimeout(audioSendTimeoutRef.current);
+      audioSendTimeoutRef.current = null;
     }
 
     // Play audio if volume is not muted and audio data is available
@@ -245,23 +374,69 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
           source.connect(audioContextRef.current!.destination);
           source.start(0);
 
-          // Start listening again when audio playback ends
+          // When audio playback ends, mark AI as done speaking and process any queued audio
           source.onended = () => {
-            console.log("Audio playback ended, starting to listen again");
-            setTimeout(startListening, 500);
+            console.log("Audio playback ended, checking for queued audio");
+            isAISpeakingRef.current = false;
+            waitingForUserInputRef.current = true;
+
+            // Process any queued audio first
+            const audioProcessed = processQueuedAudio();
+
+            // If no audio was processed, start listening for new input
+            if (!audioProcessed) {
+              console.log("No queued audio found, starting to listen for new input");
+
+              // Start listening after a very short delay to avoid picking up any residual sounds
+              // Reduced delay for better responsiveness
+              setTimeout(() => {
+                startListening();
+                console.log("Started listening for user response");
+              }, 500);
+            }
           };
         }, (error) => {
           console.error("Error decoding audio data:", error);
-          // Start listening again even if there was an error
-          setTimeout(startListening, 500);
+          // Mark AI as done speaking even if there was an error
+          isAISpeakingRef.current = false;
+          waitingForUserInputRef.current = true;
+
+          // Process any queued audio first
+          const audioProcessed = processQueuedAudio();
+
+          // If no audio was processed, start listening for new input
+          if (!audioProcessed) {
+            console.log("No queued audio found, starting to listen for new input");
+
+            // Start listening after a short delay
+            setTimeout(() => {
+              startListening();
+              console.log("Started listening for user response after error");
+            }, 500);
+          }
         });
       } catch (error) {
         console.error("Error processing audio response:", error);
-        // Start listening again even if there was an error
-        setTimeout(startListening, 500);
+        // Mark AI as done speaking even if there was an error
+        isAISpeakingRef.current = false;
+        waitingForUserInputRef.current = true;
+
+        // Process any queued audio first
+        const audioProcessed = processQueuedAudio();
+
+        // If no audio was processed, start listening for new input
+        if (!audioProcessed) {
+          console.log("No queued audio found, starting to listen for new input");
+
+          // Start listening after a short delay
+          setTimeout(() => {
+            startListening();
+            console.log("Started listening for user response after error");
+          }, 500);
+        }
       }
     } else if (!data.audio) {
-      console.log("No audio data received from server");
+      console.log("No audio data received from server, using browser speech synthesis");
 
       // Use browser's speech synthesis as fallback if no audio data
       if (!isVolumeMuted && 'speechSynthesis' in window) {
@@ -300,22 +475,54 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
             }
 
             // Add event listeners for speech events
-            utterance.onstart = () => console.log("Speech started");
-            utterance.onend = () => {
-              console.log("Speech ended, starting to listen again");
-              setTimeout(startListening, 500);
+            utterance.onstart = () => {
+              console.log("Speech started");
+              isAISpeakingRef.current = true;
             };
+
+            utterance.onend = () => {
+              console.log("Speech ended, checking for queued audio");
+              isAISpeakingRef.current = false;
+              waitingForUserInputRef.current = true;
+
+              // Process any queued audio first
+              const audioProcessed = processQueuedAudio();
+
+              // If no audio was processed, start listening for new input
+              if (!audioProcessed) {
+                console.log("No queued audio found, starting to listen for new input");
+
+                // Start listening after a short delay
+                setTimeout(() => {
+                  startListening();
+                  console.log("Started listening for user response");
+                }, 500);
+              }
+            };
+
             utterance.onerror = (e) => {
               console.error("Speech error:", e);
+              // Mark AI as done speaking even if there was an error
+              isAISpeakingRef.current = false;
+              waitingForUserInputRef.current = true;
+
               // If speech is interrupted, try again with a simpler approach
               if (e.error === 'interrupted') {
                 console.log("Speech was interrupted, trying again with default settings");
                 const simpleUtterance = new SpeechSynthesisUtterance(data.text);
-                simpleUtterance.onend = () => setTimeout(startListening, 500);
+                simpleUtterance.onend = () => {
+                  setTimeout(() => {
+                    startListening();
+                    console.log("Started listening after simple utterance");
+                  }, 500);
+                };
                 window.speechSynthesis.speak(simpleUtterance);
               } else {
-                // Start listening again even if there was an error
-                setTimeout(startListening, 500);
+                // Start listening after a short delay
+                setTimeout(() => {
+                  startListening();
+                  console.log("Started listening after speech error");
+                }, 500);
               }
             };
 
@@ -323,12 +530,35 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
           }, 100); // Small delay to ensure previous speech is fully canceled
         } catch (error) {
           console.error("Error using speech synthesis:", error);
-          // Start listening again even if there was an error
-          setTimeout(startListening, 500);
+          // Mark AI as done speaking even if there was an error
+          isAISpeakingRef.current = false;
+          waitingForUserInputRef.current = true;
+
+          // Start listening after a short delay
+          setTimeout(() => {
+            startListening();
+            console.log("Started listening after speech synthesis error");
+          }, 500);
         }
       } else {
-        // If speech synthesis is not available or volume is muted, start listening again
-        setTimeout(startListening, 500);
+        // If speech synthesis is not available or volume is muted
+        console.log("Speech synthesis not available or volume muted");
+        isAISpeakingRef.current = false;
+        waitingForUserInputRef.current = true;
+
+        // Process any queued audio first
+        const audioProcessed = processQueuedAudio();
+
+        // If no audio was processed, start listening for new input
+        if (!audioProcessed) {
+          console.log("No queued audio found, starting to listen for new input");
+
+          // Start listening after a short delay
+          setTimeout(() => {
+            startListening();
+            console.log("Started listening (no speech synthesis)");
+          }, 500);
+        }
       }
     }
   };
@@ -367,9 +597,93 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
   // Handle socket disconnection
   const handleSocketDisconnect = () => {
     console.log('Socket disconnected');
+    setStatusMessage('Connection lost. Attempting to reconnect...');
+
+    // Only set call as ended if we manually ended the call
+    // Otherwise, try to reconnect
+    if (callStatus === CallStatus.ENDED) {
+      setStatusMessage('Call ended');
+    } else {
+      setCallStatus(CallStatus.CONNECTING);
+      setStatusMessage('Connection lost. Attempting to reconnect...');
+
+      // Try to reconnect if socket exists
+      if (socketRef.current) {
+        try {
+          socketRef.current.connect();
+        } catch (error) {
+          console.error("Error reconnecting socket:", error);
+        }
+      }
+    }
+  };
+
+  // Handle connection error
+  const handleConnectionError = (error: Error) => {
+    console.error('Connection error:', error);
+    setCallStatus(CallStatus.CONNECTING);
+    setStatusMessage('Connection error. Attempting to reconnect...');
+  };
+
+  // Handle successful reconnection
+  const handleReconnect = (attemptNumber: number) => {
+    console.log(`Reconnected after ${attemptNumber} attempts`);
+    setCallStatus(CallStatus.CONNECTED);
+    setStatusMessage('Reconnected');
+
+    // Reset processing state to allow new audio to be processed
+    processingAudioRef.current = false;
+  };
+
+  // Handle reconnection attempt
+  const handleReconnectAttempt = (attemptNumber: number) => {
+    console.log(`Reconnection attempt ${attemptNumber}`);
+    setStatusMessage(`Reconnecting... (Attempt ${attemptNumber})`);
+  };
+
+  // Handle reconnection error
+  const handleReconnectError = (error: Error) => {
+    console.error('Reconnection error:', error);
+    setStatusMessage('Reconnection error. Trying again...');
+  };
+
+  // Handle reconnection failure
+  const handleReconnectFailed = () => {
+    console.error('Failed to reconnect');
+    setCallStatus(CallStatus.ERROR);
+    setStatusMessage('Failed to reconnect. Please try again later.');
+  };
+
+  // Handle heartbeat from server
+  const handleHeartbeat = (data: { timestamp: number }) => {
+    console.log(`Heartbeat received: ${new Date(data.timestamp).toISOString()}`);
+    // Reset processing flag if it's been stuck for too long
+    const now = Date.now();
+    const PROCESSING_TIMEOUT = 10000; // 10 seconds
+
+    if (processingAudioRef.current && now - lastAudioSendTimeRef.current > PROCESSING_TIMEOUT) {
+      console.log("Processing flag has been stuck for too long, resetting");
+      processingAudioRef.current = false;
+    }
+  };
+
+  // Handle call ended event from server
+  const handleCallEnded = (data: { message: string }) => {
+    console.log(`Call ended: ${data.message}`);
     setCallStatus(CallStatus.ENDED);
     setStatusMessage('Call ended');
+    onEndCall();
   };
+
+  // Track audio processing state
+  const lastAudioSendTimeRef = useRef<number>(0);
+  const processingAudioRef = useRef<boolean>(false);
+  const MIN_AUDIO_INTERVAL_MS = 2000; // Minimum 2 seconds between audio sends - reduced to improve responsiveness
+  const lastTranscriptRef = useRef<string>(''); // Track the last transcript to avoid duplicates
+  const silenceDetectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const audioBufferRef = useRef<Blob[]>([]); // Buffer to accumulate audio chunks
+  const MAX_BUFFER_SIZE = 3; // Maximum number of chunks to accumulate
+  const audioSendTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle audio data from MediaRecorder
   const handleDataAvailable = (event: BlobEvent) => {
@@ -377,13 +691,79 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
       console.log("Audio data available, size:", event.data.size);
 
       try {
-        // Skip very small audio data
-        if (event.data.size < 100) {
-          console.warn("Audio data too small, skipping");
+        // Skip very small audio data (likely silence or background noise)
+        // Increased minimum size to avoid processing tiny audio chunks
+        if (event.data.size < 5000) {
+          console.warn("Audio data too small, likely silence or noise - skipping");
           return;
         }
 
-        // Convert blob to array buffer
+        // If AI is currently speaking, queue the audio instead of ignoring it
+        if (isAISpeakingRef.current) {
+          console.log("AI is currently speaking, queueing user audio");
+          // We'll still add this audio to the buffer, but we won't send it yet
+          // It will be processed when the AI stops speaking
+
+          // Add the current audio chunk to the buffer
+          audioBufferRef.current.push(event.data);
+
+          // If we have too many chunks, remove the oldest one
+          if (audioBufferRef.current.length > MAX_BUFFER_SIZE) {
+            audioBufferRef.current.shift();
+          }
+
+          // Don't proceed with sending the audio now
+          return;
+        }
+
+        // Check if we have a transcript from speech recognition
+        // If we do, we're definitely processing user speech
+        const currentTranscript = transcript.trim();
+        if (currentTranscript) {
+          console.log(`Current transcript: "${currentTranscript}"`);
+        }
+
+        // Set waiting for user input to false since we're now processing user input
+        waitingForUserInputRef.current = false;
+
+        // We're not using browser speech recognition anymore
+        // The transcript will be set from the server response
+
+        // Implement more aggressive debouncing to prevent sending audio too frequently
+        const now = Date.now();
+        if (now - lastAudioSendTimeRef.current < MIN_AUDIO_INTERVAL_MS || processingAudioRef.current) {
+          console.log("Debouncing audio send or already processing, skipping");
+          return;
+        }
+
+        // Clear any existing silence detection timeout
+        if (silenceDetectionTimeoutRef.current) {
+          clearTimeout(silenceDetectionTimeoutRef.current);
+          silenceDetectionTimeoutRef.current = null;
+        }
+
+        // Clear any existing audio send timeout
+        if (audioSendTimeoutRef.current) {
+          clearTimeout(audioSendTimeoutRef.current);
+          audioSendTimeoutRef.current = null;
+        }
+
+        // Set processing flag and update last send time
+        processingAudioRef.current = true;
+        lastAudioSendTimeRef.current = now;
+
+        // Add the current audio chunk to the buffer
+        audioBufferRef.current.push(event.data);
+
+        // If we have too many chunks, remove the oldest one
+        if (audioBufferRef.current.length > MAX_BUFFER_SIZE) {
+          audioBufferRef.current.shift();
+        }
+
+        // Combine all audio chunks into a single blob
+        const combinedBlob = new Blob(audioBufferRef.current, { type: event.data.type });
+
+        // Convert the combined blob to array buffer
         const reader = new FileReader();
 
         reader.onloadend = () => {
@@ -394,6 +774,9 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
 
               if (!arrayBuffer) {
                 console.error("Failed to read audio data");
+                processingAudioRef.current = false;
+                // Clear the audio buffer
+                audioBufferRef.current = [];
                 return;
               }
 
@@ -410,27 +793,85 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
 
               console.log(`Sending audio data (${base64Audio.length} bytes)`);
 
-              // Send the base64 encoded audio data to the server
-              // Use 'raw' as the format to let the server handle detection
-              socketRef.current.emit('voice-data', {
-                audio: base64Audio,
-                audio_format: 'raw', // Let the server handle format detection
-                companion_name: name,
-                personality: personality
-              });
+              // Check if socket is connected before sending
+              if (socketRef.current.connected) {
+                // Send the base64 encoded audio data to the server
+                // Use the actual MIME type from the MediaRecorder for better format handling
+                const audioFormat = mediaRecorderRef.current?.mimeType.includes('webm') ? 'webm' :
+                                   mediaRecorderRef.current?.mimeType.includes('ogg') ? 'ogg' :
+                                   mediaRecorderRef.current?.mimeType.includes('mp3') ? 'mp3' : 'wav';
+
+                console.log(`Sending audio with format: ${audioFormat} based on MIME type: ${mediaRecorderRef.current?.mimeType}`);
+
+                socketRef.current.emit('voice-data', {
+                  audio: base64Audio,
+                  audio_format: audioFormat,
+                  companion_name: name,
+                  personality: personality
+                });
+
+                // Clear the audio buffer after sending
+                audioBufferRef.current = [];
+
+                // Set a timeout to reset the processing flag
+                // This gives the server time to process and prevents sending too frequently
+                // Reduced timeout to improve responsiveness
+                audioSendTimeoutRef.current = setTimeout(() => {
+                  console.log("Resetting processing flag after timeout");
+                  processingAudioRef.current = false;
+
+                  // Also clear the audio buffer again just to be safe
+                  audioBufferRef.current = [];
+                }, 2000);
+              } else {
+                console.warn("Socket not connected, cannot send audio data");
+                setStatusMessage("Connection lost. Reconnecting...");
+                setCallStatus(CallStatus.CONNECTING);
+
+                // Reset processing flag immediately since we didn't send anything
+                processingAudioRef.current = false;
+
+                // Clear the audio buffer
+                audioBufferRef.current = [];
+
+                // Try to reconnect if socket exists
+                if (socketRef.current) {
+                  try {
+                    socketRef.current.connect();
+                  } catch (error) {
+                    console.error("Error reconnecting socket:", error);
+                  }
+                }
+              }
             } catch (error) {
-              console.error("Error processing audio data");
+              console.error("Error processing audio data:", error);
+              processingAudioRef.current = false;
+              audioBufferRef.current = [];
             }
+          } else {
+            processingAudioRef.current = false;
+            audioBufferRef.current = [];
           }
         };
 
         reader.onerror = () => {
           console.error("Error reading audio data");
+          processingAudioRef.current = false;
+          audioBufferRef.current = [];
         };
 
-        reader.readAsArrayBuffer(event.data);
+        // Read the combined blob instead of just the current event data
+        reader.readAsArrayBuffer(combinedBlob);
       } catch (error) {
-        console.error("Error handling audio data");
+        console.error("Error handling audio data:", error);
+        processingAudioRef.current = false;
+        audioBufferRef.current = [];
+
+        // Clear any existing audio send timeout
+        if (audioSendTimeoutRef.current) {
+          clearTimeout(audioSendTimeoutRef.current);
+          audioSendTimeoutRef.current = null;
+        }
       }
     }
   };
@@ -472,7 +913,25 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
 
     // Stop speech recognition
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        // Remove all event listeners first
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onresult = null;
+        } catch (e) {
+          console.error("Error removing recognition event listeners:", e);
+        }
+
+        // Then stop recognition
+        recognitionRef.current.stop();
+        console.log("Stopped speech recognition during cleanup");
+      } catch (error) {
+        console.error("Error stopping speech recognition:", error);
+      }
+
+      // Clear the reference
+      recognitionRef.current = null;
     }
 
     // Stop audio tracks
@@ -482,7 +941,33 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
 
     // Close audio context
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close();
+      try {
+        audioContextRef.current.close();
+      } catch (error) {
+        console.error("Error closing audio context:", error);
+      }
+    }
+
+    // Clear any timeouts
+    if (silenceDetectionTimeoutRef.current) {
+      clearTimeout(silenceDetectionTimeoutRef.current);
+      silenceDetectionTimeoutRef.current = null;
+    }
+
+    if (audioSendTimeoutRef.current) {
+      clearTimeout(audioSendTimeoutRef.current);
+      audioSendTimeoutRef.current = null;
+    }
+
+    // Clear audio buffer
+    audioBufferRef.current = [];
+
+    // Reset processing flags
+    processingAudioRef.current = false;
+
+    // Cancel any ongoing speech synthesis
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
 
     // Disconnect socket
@@ -521,6 +1006,14 @@ const VoiceCall: React.FC<VoiceCallProps> = ({ name, personality, image, userId,
       {/* Name and personality */}
       <h2 className="text-2xl font-bold text-white mb-1">{name}</h2>
       <p className="text-gray-400 mb-8">{personality}</p>
+
+      {/* Listening indicator */}
+      <div className={`w-full text-center mb-2 ${isListening ? 'visible' : 'invisible'}`}>
+        <div className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-full">
+          <div className="w-3 h-3 bg-white rounded-full mr-2 animate-pulse"></div>
+          Listening...
+        </div>
+      </div>
 
       {/* Transcript and AI response */}
       <div className="w-full bg-gray-800 rounded-lg p-4 mb-8 max-h-32 overflow-y-auto">

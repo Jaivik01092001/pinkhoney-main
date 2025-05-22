@@ -44,10 +44,8 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
     const rawInputFilePath = path.join(tempDir, rawInputFileName);
     outputFilePath = path.join(tempDir, outputFileName);
 
-    // We'll create multiple input files with different extensions to try different approaches
-    const wavInputFilePath = path.join(tempDir, `input_${timestamp}.wav`);
-    const mp3InputFilePath = path.join(tempDir, `input_${timestamp}.mp3`);
-    const pcmInputFilePath = path.join(tempDir, `input_${timestamp}.pcm`);
+    // OpenAI Whisper API supported formats
+    const supportedFormats = ['m4a', 'mp3', 'webm', 'mp4', 'mpga', 'wav', 'mpeg'];
 
     console.log(`Processing audio data (reported format: ${audioFormat})`);
 
@@ -98,13 +96,16 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
     // Try different conversion approaches
     let conversionSuccessful = false;
 
+    // Create a direct MP3 file for OpenAI Whisper API
+    const directMp3Path = path.join(tempDir, `direct_${timestamp}.mp3`);
+
     // Approach 1: Try to convert directly to MP3 using ffmpeg's format auto-detection
     try {
       console.log("Approach 1: Direct conversion to MP3...");
 
       await new Promise((resolve, reject) => {
         ffmpeg(rawInputFilePath)
-          .output(outputFilePath)
+          .output(directMp3Path)
           .outputOptions([
             '-acodec', 'libmp3lame',
             '-ac', '1',              // Mono audio
@@ -123,33 +124,35 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
       });
 
       // Set the tempFilePath to the converted file
-      tempFilePath = outputFilePath;
+      tempFilePath = directMp3Path;
       conversionSuccessful = true;
     } catch (error) {
       console.log('Approach 1 failed, trying next approach');
     }
 
-    // Approach 2: Try to create a WAV file first, then convert to MP3
+    // Approach 2: Create a WAV file for OpenAI Whisper API
     if (!conversionSuccessful) {
       try {
-        console.log("Approach 2: Creating WAV file first...");
+        console.log("Approach 2: Creating WAV file...");
 
-        // Create a WAV file from the raw data
-        const wavFilePath = path.join(tempDir, `wav_${timestamp}.wav`);
+        // Create a WAV file directly
+        const wavFilePath = path.join(tempDir, `direct_${timestamp}.wav`);
 
-        // Copy the raw data to a WAV file
-        fs.copyFileSync(rawInputFilePath, wavFilePath);
-
-        // Now try to convert the WAV to MP3
+        // Try with different PCM settings for better compatibility
         await new Promise((resolve, reject) => {
-          ffmpeg(wavFilePath)
-            .inputOptions(['-f', 'wav']) // Force input format as WAV
-            .output(outputFilePath)
+          ffmpeg()
+            .input(rawInputFilePath)
+            .inputOptions([
+              '-f', 's16le',  // Treat as raw PCM
+              '-ar', '16000', // Sample rate
+              '-ac', '1'      // Mono
+            ])
+            .output(wavFilePath)
             .outputOptions([
-              '-acodec', 'libmp3lame',
-              '-ac', '1',
-              '-ar', '16000',
-              '-b:a', '64k'
+              '-acodec', 'pcm_s16le',
+              '-ar', '16000', // Ensure 16kHz sample rate
+              '-ac', '1',     // Ensure mono audio
+              '-f', 'wav'
             ])
             .on('end', () => {
               console.log('Approach 2 succeeded');
@@ -162,20 +165,23 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
             .run();
         });
 
-        // Clean up the temporary WAV file
-        if (fs.existsSync(wavFilePath)) {
-          fs.unlinkSync(wavFilePath);
-        }
+        // Verify the WAV file exists and has content
+        if (fs.existsSync(wavFilePath) && fs.statSync(wavFilePath).size > 0) {
+          console.log(`WAV file created successfully: ${fs.statSync(wavFilePath).size} bytes`);
 
-        // Set the tempFilePath to the converted file
-        tempFilePath = outputFilePath;
-        conversionSuccessful = true;
+          // Set the tempFilePath to the WAV file
+          tempFilePath = wavFilePath;
+          conversionSuccessful = true;
+        } else {
+          console.error('WAV file creation failed or file is empty');
+          throw new Error('WAV file creation failed');
+        }
       } catch (error) {
         console.log('Approach 2 failed, trying next approach');
       }
     }
 
-    // Approach 3: Try to treat the data as raw PCM audio
+    // Approach 3: Try to treat the data as raw PCM audio and convert to MP3
     if (!conversionSuccessful) {
       try {
         console.log("Approach 3: Treating as raw PCM audio...");
@@ -212,18 +218,18 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
       }
     }
 
-    // Approach 4: Try to use ffmpeg's alaw codec which is very robust
+    // Approach 4: Try to use ffmpeg's mulaw codec which is very robust
     if (!conversionSuccessful) {
       try {
-        console.log("Approach 4: Using alaw codec...");
+        console.log("Approach 4: Using mulaw codec...");
 
         // Create a new output file
-        const alawOutputPath = path.join(tempDir, `alaw_${timestamp}.mp3`);
+        const mulawOutputPath = path.join(tempDir, `mulaw_${timestamp}.mp3`);
 
         await new Promise((resolve, reject) => {
           ffmpeg(rawInputFilePath)
-            .inputOptions(['-f', 'alaw', '-ar', '8000', '-ac', '1']) // Try alaw format
-            .output(alawOutputPath)
+            .inputOptions(['-f', 'mulaw', '-ar', '8000', '-ac', '1']) // Try mulaw format
+            .output(mulawOutputPath)
             .outputOptions([
               '-acodec', 'libmp3lame',
               '-ac', '1',
@@ -242,7 +248,7 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
         });
 
         // Set the tempFilePath to the converted file
-        tempFilePath = alawOutputPath;
+        tempFilePath = mulawOutputPath;
         conversionSuccessful = true;
       } catch (error) {
         console.log('Approach 4 failed, trying fallback approach');
@@ -310,20 +316,88 @@ const speechToText = async (audioData, audioFormat = 'wav') => {
 
       console.log(`Sending audio file to OpenAI (${fs.statSync(tempFilePath).size} bytes)`);
 
+      // Verify the file format is supported by OpenAI
+      const fileExtension = path.extname(tempFilePath).toLowerCase().substring(1);
+      console.log(`File extension: ${fileExtension}`);
+
       // Send the file to OpenAI
-      const response = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(tempFilePath),
-        model: "whisper-1",
-        language: "en",
-        response_format: "json"
-      });
+      try {
+        const response = await openai.audio.transcriptions.create({
+          file: fs.createReadStream(tempFilePath),
+          model: "whisper-1",
+          language: "en",
+          response_format: "json"
+        });
 
-      // Clean up the temporary files
-      cleanupFiles(null, tempFilePath);
+        // Clean up the temporary files
+        cleanupFiles(null, tempFilePath);
 
-      return response.text || "I couldn't understand what you said.";
+        // Check if the response has text and validate it
+        if (response.text && response.text.trim()) {
+          // Clean the transcription text to remove emojis and special characters
+          const cleanedText = cleanTranscriptionText(response.text);
+
+          // If the cleaned text is too short or empty, return an error message
+          if (!cleanedText || cleanedText.length < 2) {
+            return "I couldn't understand what you said.";
+          }
+
+          return cleanedText;
+        } else {
+          return "I couldn't understand what you said.";
+        }
+      } catch (apiError) {
+        console.error("Error in OpenAI API call:", apiError.message || apiError);
+
+        // If the error is related to file format, try to convert to a different format
+        if (apiError.message && apiError.message.includes("Invalid file format")) {
+          console.log("Invalid file format error, trying to convert to MP3...");
+
+          try {
+            // Convert to MP3 as a last resort
+            const mp3FilePath = path.join(os.tmpdir(), `final_${Date.now()}.mp3`);
+
+            await new Promise((resolve, reject) => {
+              ffmpeg(tempFilePath)
+                .output(mp3FilePath)
+                .outputOptions([
+                  '-acodec', 'libmp3lame',
+                  '-ac', '1',
+                  '-ar', '16000',
+                  '-b:a', '64k'
+                ])
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+            });
+
+            console.log(`Sending converted MP3 file to OpenAI (${fs.statSync(mp3FilePath).size} bytes)`);
+
+            const retryResponse = await openai.audio.transcriptions.create({
+              file: fs.createReadStream(mp3FilePath),
+              model: "whisper-1",
+              language: "en",
+              response_format: "json"
+            });
+
+            // Clean up files
+            cleanupFiles(null, tempFilePath);
+            cleanupFiles(null, mp3FilePath);
+
+            return retryResponse.text || "I couldn't understand what you said.";
+          } catch (retryError) {
+            console.error("Error in retry attempt:", retryError.message || retryError);
+            cleanupFiles(null, tempFilePath);
+            return "I couldn't understand what you said. Could you please try again?";
+          }
+        }
+
+        // Clean up the temporary files
+        cleanupFiles(null, tempFilePath);
+        return "I couldn't understand what you said. Could you please try again?";
+      }
     } catch (error) {
-      console.error("Error in OpenAI API call:", error.message || error);
+      console.error("Error processing audio:", error.message || error);
 
       // Clean up the temporary files
       cleanupFiles(null, tempFilePath);
@@ -363,6 +437,33 @@ const cleanupFiles = (inputPath, outputPath) => {
       console.error("Error cleaning up file:", error.message || error);
     }
   }
+};
+
+/**
+ * Clean transcription text to remove emojis and unwanted characters
+ * @param {string} text - The transcription text to clean
+ * @returns {string} Cleaned text
+ */
+const cleanTranscriptionText = (text) => {
+  if (!text) return '';
+
+  // Log the original text for debugging
+  console.log(`Original transcription: "${text}"`);
+
+  // Remove emojis and special characters
+  const cleanedText = text
+    // Remove emoji characters
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    // Remove special characters that are unlikely to be in speech
+    .replace(/[★☆♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼]/g, '')
+    // Remove multiple spaces
+    .replace(/\s+/g, ' ')
+    // Trim whitespace
+    .trim();
+
+  console.log(`Cleaned transcription: "${cleanedText}"`);
+
+  return cleanedText;
 };
 
 /**
