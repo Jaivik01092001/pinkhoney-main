@@ -73,6 +73,21 @@ const getUserById = async (userId) => {
 };
 
 /**
+ * Get user by Clerk ID
+ * @param {string} clerkId - Clerk user ID
+ * @returns {Promise<Object|null>} User data or null if not found
+ */
+const getUserByClerkId = async (clerkId) => {
+  try {
+    const user = await User.findOne({ clerkId });
+    return user;
+  } catch (error) {
+    console.error("Error getting user by Clerk ID:", error);
+    throw error;
+  }
+};
+
+/**
  * Save chat message
  * @param {string} userId - User ID
  * @param {string} name - Companion name
@@ -198,6 +213,7 @@ module.exports = {
   createUser,
   updateUser,
   getUserById,
+  getUserByClerkId,
   saveChatMessage,
   getChatHistory,
   createPayment,

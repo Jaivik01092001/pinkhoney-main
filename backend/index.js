@@ -1,13 +1,10 @@
 require("dotenv").config();
 const express = require("express");
-const helmet = require("helmet");
-const morgan = require("morgan");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
 const { errorHandler } = require("./middleware/errorHandler");
 const connectDB = require("./config/database");
-const { clerkMiddleware } = require("@clerk/express");
 const { speechToText, textToSpeech } = require("./services/speechService");
 const { getAIResponse } = require("./services/aiService");
 
@@ -41,55 +38,18 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 8080; // Default to 8080 to match frontend expectations
 
 // Middleware
-// Configure Helmet with enhanced security settings
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: [
-          "'self'",
-          process.env.FRONTEND_URL || "http://localhost:3000",
-        ],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'self'"],
-      },
-    },
-    xssFilter: true,
-    noSniff: true,
-    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-    hsts: {
-      maxAge: 15552000, // 180 days in seconds
-      includeSubDomains: true,
-      preload: true,
-    },
-    frameguard: { action: "deny" },
-    permittedCrossDomainPolicies: { permittedPolicies: "none" },
-  })
-);
-
-// Use the custom CORS middleware from middleware/cors.js
+// Import security middleware
+const {
+  helmetMiddleware,
+  apiLimiter,
+  authMiddleware,
+} = require("./middleware/securityMiddleware");
 const corsMiddleware = require("./middleware/cors");
+const logger = require("./middleware/logger");
+
+// Apply security middleware
+app.use(helmetMiddleware);
 app.use(corsMiddleware);
-
-// Rate limiting to prevent abuse
-const rateLimit = require("express-rate-limit");
-const config = require("./config/config");
-
-const apiLimiter = rateLimit({
-  windowMs: config.security.rateLimiting.windowMs,
-  max: config.security.rateLimiting.max,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again later.",
-});
-
-// Apply rate limiting to all API routes
 app.use("/api", apiLimiter);
 
 // Body parsers with size limits to prevent abuse
@@ -97,13 +57,10 @@ app.use(express.json({ limit: "1mb" })); // Parse JSON bodies with size limit
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // Parse URL-encoded bodies with size limit
 
 // Request logging
-app.use(morgan("dev"));
+app.use(logger);
 
-app.use(
-  clerkMiddleware({
-    secretKey: process.env.CLERK_SECRET_KEY, // same env var as before
-  })
-);
+// Apply Clerk authentication middleware
+app.use(authMiddleware);
 
 // Routes
 app.use("/api", aiRoutes);
