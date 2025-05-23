@@ -99,7 +99,7 @@ function Chat() {
       <div>
         <img
           onClick={go_to_home}
-          className="w-full"
+          className="w-fit mx-auto mb-6 rounded-3 overflow-hidden"
           src="/pricing_top.PNG"
           alt="Woman eating ice cream"
         />

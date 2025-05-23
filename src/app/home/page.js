@@ -442,7 +442,7 @@ export default function Home() {
   return (
     <>
       <div className="min-h-screen">
-        <div className="flex items-center justify-center gap-3 text-pink-500 font-semibold">
+        <div className="flex items-center justify-center gap-3 text-pink-500 font-semibold mt-8">
           {/* <div className="w-2 h-2 rounded-full bg-pink-500" /> */}
           <svg
             width="19"
