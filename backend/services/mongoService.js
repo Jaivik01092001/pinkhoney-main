@@ -189,6 +189,33 @@ const createPayment = async (paymentData) => {
 };
 
 /**
+ * Find payment by session ID pattern
+ * @param {string} sessionIdPattern - Part of the session ID to search for
+ * @returns {Promise<Object>} Found payment record
+ */
+const findPaymentBySessionIdPattern = async (sessionIdPattern) => {
+  try {
+    console.log(`Searching for payment with session ID pattern: ${sessionIdPattern}`);
+
+    // Use regex to find payments where stripeSessionId contains the pattern
+    const payment = await Payment.findOne({
+      stripeSessionId: { $regex: sessionIdPattern, $options: 'i' }
+    });
+
+    if (payment) {
+      console.log(`Found payment with pattern match: ${payment.stripeSessionId}`);
+    } else {
+      console.log(`No payment found with session ID pattern: ${sessionIdPattern}`);
+    }
+
+    return payment;
+  } catch (error) {
+    console.error("Error finding payment by pattern:", error);
+    return null;
+  }
+};
+
+/**
  * Update payment record
  * @param {string} stripeSessionId - Stripe session ID
  * @param {Object} updateData - Data to update
@@ -196,11 +223,39 @@ const createPayment = async (paymentData) => {
  */
 const updatePayment = async (stripeSessionId, updateData) => {
   try {
-    const payment = await Payment.findOneAndUpdate(
-      { stripeSessionId },
+    console.log(`Attempting to update payment with stripeSessionId: ${stripeSessionId}`);
+    console.log(`Update data:`, JSON.stringify(updateData));
+
+    // First check if the payment exists
+    let existingPayment = await Payment.findOne({ stripeSessionId });
+
+    // If not found by exact match, try to find by pattern
+    if (!existingPayment && stripeSessionId.includes('_')) {
+      // Extract the unique part of the session ID after the last underscore
+      const sessionIdParts = stripeSessionId.split('_');
+      const uniquePart = sessionIdParts[sessionIdParts.length - 1];
+
+      if (uniquePart && uniquePart.length > 10) {
+        console.log(`Trying to find payment by unique part of session ID: ${uniquePart}`);
+        existingPayment = await findPaymentBySessionIdPattern(uniquePart);
+      }
+    }
+
+    if (!existingPayment) {
+      console.log(`No payment found with stripeSessionId: ${stripeSessionId}`);
+      return null;
+    }
+
+    console.log(`Found payment record: ${existingPayment._id}, current status: ${existingPayment.status}`);
+
+    // Update the payment
+    const payment = await Payment.findByIdAndUpdate(
+      existingPayment._id,
       { $set: updateData },
       { new: true }
     );
+
+    console.log(`Payment updated successfully, new status: ${payment.status}`);
     return payment;
   } catch (error) {
     console.error("Error updating payment:", error);
@@ -218,4 +273,5 @@ module.exports = {
   getChatHistory,
   createPayment,
   updatePayment,
+  findPaymentBySessionIdPattern,
 };

@@ -20,14 +20,8 @@ const stripeWebhookMiddleware = express.raw({ type: "application/json" });
  * Verifies that the webhook request came from Stripe
  */
 const verifyStripeWebhook = (req, res, next) => {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  if (!isProduction) {
-    console.log(
-      "Skipping Stripe webhook signature verification in development mode"
-    );
-    return next();
-  }
+  // Always verify webhook signatures, even in development
+  // This ensures consistent behavior across environments
 
   const signature = req.headers["stripe-signature"];
 
@@ -46,6 +40,12 @@ const verifyStripeWebhook = (req, res, next) => {
       signature,
       config.stripe.webhookSecret
     );
+
+    // Log the event type and session ID for debugging
+    console.log("Webhook event verified:", event.type);
+    if (event.type === "checkout.session.completed") {
+      console.log("Checkout session completed webhook received. Session ID:", event.data.object.id);
+    }
 
     // Attach the verified event to the request object
     req.stripeEvent = event;

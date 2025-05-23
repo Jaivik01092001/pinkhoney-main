@@ -93,7 +93,9 @@ const checkEmail = async (req, res, next) => {
  */
 const changeSubscription = async (req, res, next) => {
   try {
-    const { user_id, selected_plan } = req.body;
+    const { user_id, selected_plan, email } = req.body;
+
+    console.log("Changing subscription:", { user_id, selected_plan, email });
 
     if (!user_id || !selected_plan) {
       return res.status(400).json({
@@ -114,13 +116,38 @@ const changeSubscription = async (req, res, next) => {
     }
 
     // Update user subscription
-    console.log("User exists in MongoDB");
-    await updateUser(user.id, { subscribed: selected_plan });
+    console.log("User exists in MongoDB, updating subscription to:", selected_plan);
+
+    // Create subscription data based on the selected plan
+    const subscriptionData = {
+      subscribed: "yes",
+      subscription: {
+        plan: selected_plan,
+        startDate: new Date(),
+        endDate:
+          selected_plan === "lifetime"
+            ? null
+            : selected_plan === "yearly"
+              ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        status: "active",
+      },
+    };
+
+    // If plan is "free", set subscribed to "no"
+    if (selected_plan === "free") {
+      subscriptionData.subscribed = "no";
+      subscriptionData.subscription.status = "inactive";
+    }
+
+    await updateUser(user.user_id, subscriptionData);
+    console.log("Subscription updated successfully");
 
     return res.status(200).json({
       status: "success",
     });
   } catch (error) {
+    console.error("Error updating subscription:", error);
     next(error);
   }
 };

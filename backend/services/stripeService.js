@@ -3,11 +3,13 @@
  */
 const stripe = require("stripe");
 const config = require("../config/config");
+const Payment = require("../models/Payment");
 const {
   createPayment,
   updatePayment,
   updateUser,
   getUserById,
+  findPaymentBySessionIdPattern,
 } = require("./mongoService");
 
 // Initialize Stripe client
@@ -60,11 +62,11 @@ const createCheckoutSession = async ({ userId, email, plan }) => {
     // Create checkout session
     const session = await stripeClient.checkout.sessions.create(sessionPayload);
 
-    // Save payment record
+    // Save payment record with correct amounts
     await createPayment({
       user_id: userId,
       email,
-      amount: plan === "lifetime" ? 9999 : plan === "yearly" ? 9999 : 1999,
+      amount: plan === "lifetime" ? 9999 : plan === "yearly" ? 9999 : 1000, // Monthly plan is $10.00 = 1000 cents
       currency: "usd",
       status: "pending",
       stripeSessionId: session.id,
@@ -86,28 +88,79 @@ const createCheckoutSession = async ({ userId, email, plan }) => {
  */
 const handleWebhookEvent = async (payload, signature) => {
   try {
-    // Verify and construct the event
-    const event = stripeClient.webhooks.constructEvent(
-      payload,
-      signature,
-      config.stripe.webhookSecret
-    );
+    // Since the event is already verified in the middleware, we can use it directly
+    // We're receiving the raw payload, so we need to parse it if it's a string
+    const event = typeof payload === 'string'
+      ? JSON.parse(payload)
+      : payload.object ? payload : stripeClient.webhooks.constructEvent(
+        payload,
+        signature,
+        config.stripe.webhookSecret
+      );
+
+    console.log("Processing webhook event type:", event.type);
 
     // Handle different event types
     switch (event.type) {
       case "checkout.session.completed":
         // Payment is successful, update user subscription status
         const session = event.data.object;
+        console.log("Session ID from webhook:", session.id);
 
-        // Update payment record
-        await updatePayment(session.id, {
-          status: "completed",
+        // Update payment record with completed status
+        // Make sure we're using the correct session ID field
+        console.log("Looking for payment with session ID:", session.id);
+
+        // First try with the exact session ID
+        let payment = await updatePayment(session.id, {
+          status: "completed", // Ensure status is set to completed
           stripeCustomerId: session.customer,
           stripePaymentIntentId: session.payment_intent,
         });
 
-        // Get the payment record to find the user and plan
-        const payment = await updatePayment(session.id, {});
+        if (!payment) {
+          // If payment not found, try with the test_ prefix removed (for test mode sessions)
+          const alternativeSessionId = session.id.replace('cs_test_', 'cs_');
+          console.log("Payment not found with original session ID. Trying alternative ID:", alternativeSessionId);
+
+          payment = await updatePayment(alternativeSessionId, {
+            status: "completed",
+            stripeCustomerId: session.customer,
+            stripePaymentIntentId: session.payment_intent,
+          });
+
+          // If still not found, try to find by pattern matching the unique part of the session ID
+          if (!payment && session.id.includes('_')) {
+            const sessionIdParts = session.id.split('_');
+            const uniquePart = sessionIdParts[sessionIdParts.length - 1];
+
+            if (uniquePart && uniquePart.length > 10) {
+              console.log("Still not found. Trying to find by unique part of session ID:", uniquePart);
+
+              // Find the payment by pattern
+              const patternPayment = await findPaymentBySessionIdPattern(uniquePart);
+
+              if (patternPayment) {
+                // Update the found payment
+                payment = await Payment.findByIdAndUpdate(
+                  patternPayment._id,
+                  {
+                    $set: {
+                      status: "completed",
+                      stripeCustomerId: session.customer,
+                      stripePaymentIntentId: session.payment_intent,
+                    }
+                  },
+                  { new: true }
+                );
+                console.log("Found and updated payment by pattern matching");
+              }
+            }
+          }
+        }
+
+        console.log("Payment record updated:", payment ? "success" : "not found");
+
         if (payment) {
           // Update user subscription status
           const user = await getUserById(payment.user_id);
@@ -121,8 +174,8 @@ const handleWebhookEvent = async (payload, signature) => {
                   payment.subscriptionPlan === "lifetime"
                     ? null
                     : payment.subscriptionPlan === "yearly"
-                    ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-                    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                      ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 status: "active",
                 stripeCustomerId: session.customer,
                 stripeSubscriptionId: session.subscription,
@@ -130,7 +183,12 @@ const handleWebhookEvent = async (payload, signature) => {
             };
 
             await updateUser(user.user_id, subscriptionData);
+            console.log("User subscription updated for user:", user.user_id);
+          } else {
+            console.log("User not found for payment:", payment.user_id);
           }
+        } else {
+          console.log("Payment record not found for session ID:", session.id);
         }
 
         console.log("Checkout session completed:", session.id);

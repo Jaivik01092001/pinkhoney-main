@@ -56,7 +56,12 @@ const webhookHandler = async (req, res, next) => {
     }
 
     // Process the webhook event
-    await handleWebhookEvent(req.rawBody, signature);
+    // req.body is already raw for Stripe webhooks due to express.raw() middleware
+    // Use the pre-verified event from the middleware if available
+    const event = req.stripeEvent || req.body;
+    console.log("Webhook received for event type:", event.type || "Unknown event type");
+
+    await handleWebhookEvent(event, signature);
 
     // Return success response
     res.status(200).json({ received: true });

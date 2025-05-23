@@ -13,18 +13,18 @@ const Joi = require("joi");
 const validate = (schema, property = "body") => {
   return (req, res, next) => {
     const { error } = schema.validate(req[property], { abortEarly: false });
-    
+
     if (!error) {
       return next();
     }
-    
+
     const errors = error.details.map((detail) => ({
       field: detail.path.join("."),
       message: detail.message,
     }));
-    
+
     console.log("Validation error:", errors);
-    
+
     return res.status(400).json({
       success: false,
       error: "Validation error",
@@ -41,12 +41,13 @@ const userSchemas = {
     firstName: Joi.string().optional(),
     lastName: Joi.string().optional(),
   }),
-  
+
   changeSubscription: Joi.object({
     email: Joi.string().email().required(),
-    subscriptionType: Joi.string().valid("free", "premium", "lifetime").required(),
+    user_id: Joi.string().required(),
+    selected_plan: Joi.string().valid("monthly", "yearly", "lifetime", "free").required(),
   }),
-  
+
   increaseTokens: Joi.object({
     email: Joi.string().email().required(),
     amount: Joi.number().integer().min(1).required(),
@@ -62,7 +63,7 @@ const aiSchemas = {
     image: Joi.string().optional(),
     user_id: Joi.string().optional(),
   }),
-  
+
   getChatHistory: Joi.object({
     user_id: Joi.string().required(),
     companion_name: Joi.string().required(),
@@ -76,7 +77,7 @@ const voiceSchemas = {
     companion_name: Joi.string().required(),
     personality: Joi.string().required(),
   }),
-  
+
   endCall: Joi.object({
     call_id: Joi.string().required(),
   }),
@@ -98,12 +99,12 @@ module.exports = {
   validateUserEmail: validate(userSchemas.checkEmail),
   validateSubscriptionChange: validate(userSchemas.changeSubscription),
   validateTokenIncrease: validate(userSchemas.increaseTokens),
-  
+
   validateAIResponse: validate(aiSchemas.getAIResponse),
   validateChatHistory: validate(aiSchemas.getChatHistory, "query"),
-  
+
   validateInitiateCall: validate(voiceSchemas.initiateCall),
   validateEndCall: validate(voiceSchemas.endCall),
-  
+
   validateCheckoutSession: validate(stripeSchemas.createCheckoutSession, "query"),
 };
