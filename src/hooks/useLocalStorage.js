@@ -14,7 +14,7 @@ function useLocalStorage(key, initialValue) {
     if (typeof window === 'undefined') {
       return initialValue;
     }
-    
+
     try {
       // Get from local storage by key
       const item = window.localStorage.getItem(key);
@@ -25,7 +25,7 @@ function useLocalStorage(key, initialValue) {
       return initialValue;
     }
   });
-  
+
   // Return a wrapped version of useState's setter function that
   // persists the new value to localStorage
   const setValue = (value) => {
@@ -33,10 +33,10 @@ function useLocalStorage(key, initialValue) {
       // Allow value to be a function so we have same API as useState
       const valueToStore =
         value instanceof Function ? value(storedValue) : value;
-      
+
       // Save state
       setStoredValue(valueToStore);
-      
+
       // Save to local storage
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
@@ -45,22 +45,30 @@ function useLocalStorage(key, initialValue) {
       console.error(`Error setting localStorage key "${key}":`, error);
     }
   };
-  
+
   // Update stored value if the key changes
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       const item = window.localStorage.getItem(key);
-      setStoredValue(item ? JSON.parse(item) : initialValue);
+      const parsedItem = item ? JSON.parse(item) : initialValue;
+
+      // Compare current value with the one in localStorage
+      const currentValueStr = JSON.stringify(storedValue);
+      const newValueStr = JSON.stringify(parsedItem);
+
+      // Only update state if the value is different to prevent infinite loops
+      if (currentValueStr !== newValueStr) {
+        setStoredValue(parsedItem);
+      }
     } catch (error) {
       console.error(`Error updating from localStorage for key "${key}":`, error);
-      setStoredValue(initialValue);
     }
   }, [key, initialValue]);
-  
+
   return [storedValue, setValue];
 }
 
