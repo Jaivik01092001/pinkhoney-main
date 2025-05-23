@@ -49,7 +49,7 @@ const NavigationBar = ({
   };
 
   return (
-    <div className={`bg-black p-3 flex items-center ${className}`}>
+    <div className={`p-3 flex items-center ${className}`}>
       {type === "back" ? (
         // Back button navigation
         <>
