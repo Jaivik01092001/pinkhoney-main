@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { apiPost, getApiUrl } from "@/services/api";
+import NavigationBar from "../components/NavigationBar";
 
 function Chat() {
   const router = useRouter();
@@ -96,9 +97,16 @@ function Chat() {
 
   return (
     <>
+      <NavigationBar
+        type="back"
+        backUrl="/home"
+        title="Pricing"
+        params={{ user_id: user_id, email: email }}
+        className="mb-4"
+      />
+
       <div>
         <img
-          onClick={go_to_home}
           className="w-fit mx-auto mb-6 rounded-3 overflow-hidden"
           src="/pricing_top.PNG"
           alt="Woman eating ice cream"

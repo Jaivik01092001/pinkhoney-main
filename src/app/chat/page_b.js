@@ -169,7 +169,7 @@ function Chat() {
                             <hr className="flex-grow border-gray-600" />
                         </div> */}
           </div>
-          <div className="bg-black p-4 flex items-center sticky bottom-14">
+          <div className="bg-black p-4 flex items-center sticky bottom-14 mt-9"">
             <input
               type="text"
               placeholder="Your message"

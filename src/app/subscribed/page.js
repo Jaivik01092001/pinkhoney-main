@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { apiPost } from "@/services/api";
+import NavigationBar from "../components/NavigationBar";
 
 function Pricing() {
   const router = useRouter();
@@ -40,7 +41,30 @@ function Pricing() {
 
   return (
     <>
-      <p className="text-xl font-bold text-white">You are SUBSCRIBED !!!!</p>
+      <NavigationBar
+        type="breadcrumbs"
+        breadcrumbs={[
+          { label: "Home", url: "/home" },
+          { label: "Subscription", url: "" }
+        ]}
+        params={{ user_id: user_id, email: email }}
+        className="mb-4"
+      />
+
+      <div className="flex flex-col items-center justify-center p-8 mt-10">
+        <div className="bg-gradient-to-r from-pink-500 to-purple-500 p-1 rounded-lg">
+          <div className="bg-black p-8 rounded-lg">
+            <h2 className="text-2xl font-bold text-white mb-4">Subscription Confirmed!</h2>
+            <p className="text-white mb-6">Your subscription has been successfully activated.</p>
+            <button
+              onClick={() => router.push(`/home?user_id=${user_id}&email=${email}`)}
+              className="w-full bg-pink-500 text-white rounded-full py-3 px-6 font-medium hover:bg-pink-600 transition-colors"
+            >
+              Return to Home
+            </button>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { FaPaperPlane } from "react-icons/fa";
-import { useRouter } from "next/navigation";
 import { apiPost, apiGet } from "@/services/api";
+import NavigationBar from "../components/NavigationBar";
 
 function Chat() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const name = searchParams.get("name");
   const personality = searchParams.get("personality");
@@ -20,18 +19,26 @@ function Chat() {
   const [loading, setLoading] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false); // State for delay effect
 
+  // Reference to the chat container for auto-scrolling
+  const chatContainerRef = useRef(null);
+
+  // Function to scroll to the bottom of the chat with smooth behavior
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      // Use smooth scrolling for a better user experience
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const handleSendMessage = async () => {
     // Use the processMessage function to handle the input
     if (input.trim() !== "") {
       await processMessage(input);
     }
   };
-
-
-
-  function go_to_home() {
-    router.push(`/home?user_id=${userId}&email=${email}`);
-  }
 
   // Process a message
   const processMessage = async (messageText) => {
@@ -49,6 +56,8 @@ function Chat() {
     setMessages((prevMessages) => [...prevMessages, newMessage]);
     setInput("");
     setLoading(true);
+
+    // The scrollToBottom will be triggered by the useEffect that watches messages
 
     try {
       const data = await apiPost("api/get_ai_response", {
@@ -76,6 +85,7 @@ function Chat() {
         };
 
         setMessages((prevMessages) => [...prevMessages, botMessage]);
+        // The scrollToBottom will be triggered by the useEffect that watches messages
         setWaitingForNext(false);
       }
     } catch (error) {
@@ -135,6 +145,7 @@ function Chat() {
             "messages"
           );
           setMessages(data.messages);
+          // We'll scroll to bottom after messages are loaded in a separate useEffect
         } else {
           console.log("No chat history found or empty history");
         }
@@ -146,14 +157,29 @@ function Chat() {
     loadChatHistory();
   }, [userId, name]);
 
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-scroll to bottom when component mounts
+  useEffect(() => {
+    scrollToBottom();
+  }, []);
+
   return (
     <>
       <div className="min-h-screen">
         <div className="flex flex-col h-screen">
-          <div className="bg-black p-4 flex items-center">
-            <button onClick={go_to_home} className="text-white text-2xl mr-4">
-              {/* Back button SVG */}
-            </button>
+          <NavigationBar
+            type="breadcrumbs"
+            breadcrumbs={[
+              { label: "Matches", url: "/home" },
+              { label: name, url: "" }
+            ]}
+            params={{ user_id: userId, email: email }}
+          />
+          <div className="bg-black p-2 flex items-center border-b border-gray-800">
             <img
               src={image}
               alt="User profile"
@@ -163,11 +189,10 @@ function Chat() {
               <div className="text-white font-bold text-lg">{name}</div>
               <div className="text-green-500 text-sm">Online</div>
             </div>
-
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -211,7 +236,7 @@ function Chat() {
 
 
           {/* Input Field */}
-          <div className="bg-black p-4 flex items-center sticky bottom-14">
+          <div className="bg-black p-4 flex items-center sticky bottom-14 mt-9">
             <input
               type="text"
               placeholder="Your message"

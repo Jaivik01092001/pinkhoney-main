@@ -3,6 +3,7 @@ import React from 'react';
 import { Heart, X, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
+import NavigationBar from '../components/NavigationBar';
 
 const Index = () => {
     const searchParams = useSearchParams()
@@ -36,8 +37,15 @@ const Index = () => {
 
     return (
       <>
-        <div className="flex items-center justify-center gap-3 text-pink-500 font-semibold mt-8">
-          {/* <div className="w-2 h-2 rounded-full bg-pink-500" /> */}
+        <NavigationBar
+          type="back"
+          backUrl="/home"
+          title="Match"
+          params={{ user_id: user_id, email: email }}
+          className="mb-4"
+        />
+
+        <div className="flex items-center justify-center gap-3 text-pink-500 font-semibold mt-4">
           <svg
             width="19"
             height="32"
@@ -86,7 +94,7 @@ const Index = () => {
             <img
               src={image}
               alt="A person with blonde hair wearing a plaid shirt"
-              className="rounded-full w-48 h-64 mx-auto object-cover"
+              className="rounded-full w-64 h-128 mx-auto object-cover"
               style={{ borderRadius: "50% / 30%" }}
             />
 
