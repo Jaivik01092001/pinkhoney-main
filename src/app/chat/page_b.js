@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FaPaperPlane } from "react-icons/fa";
 import { useRouter } from "next/navigation";
+import { apiPost } from "@/services/api";
 
 function Chat() {
   const router = useRouter();
@@ -34,21 +35,12 @@ function Chat() {
     setInput("");
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8080/api/get_ai_response",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: input,
-            name: name,
-            personality: personality,
-          }),
-        }
-      );
-      const data = await response.json();
+      // Use the centralized API service
+      const data = await apiPost("api/get_ai_response", {
+        message: input,
+        name: name,
+        personality: personality,
+      });
 
       for (let i = 0; i < data.llm_ans.length; i++) {
         console.log("Message:", data.llm_ans[i]);
@@ -157,14 +149,12 @@ function Chat() {
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${
-                  message.sender === "user" ? "justify-end" : ""
-                } mb-4`}
+                className={`flex ${message.sender === "user" ? "justify-end" : ""
+                  } mb-4`}
               >
                 <div
-                  className={`${
-                    message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
-                  } text-white p-3 rounded-lg max-w-xs`}
+                  className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
+                    } text-white p-3 rounded-lg max-w-xs`}
                 >
                   {message.text}
                 </div>

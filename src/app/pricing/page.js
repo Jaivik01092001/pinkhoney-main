@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { apiPost, getApiUrl } from "@/services/api";
 
 function Chat() {
   const router = useRouter();
@@ -22,23 +23,12 @@ function Chat() {
         setIsLoading(true);
         try {
           console.log("Fetching user_id from backend");
-          const response = await fetch("http://127.0.0.1:8080/api/get_user_by_email", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ email }),
-          });
+          const data = await apiPost("api/get_user_by_email", { email });
 
-          if (response.ok) {
-            const data = await response.json();
-            console.log("User data:", data);
-            if (data.user_id) {
-              setUserId(data.user_id);
-              console.log("Setting user_id to:", data.user_id);
-            }
-          } else {
-            console.error("Failed to fetch user data");
+          console.log("User data:", data);
+          if (data.user_id) {
+            setUserId(data.user_id);
+            console.log("Setting user_id to:", data.user_id);
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -65,7 +55,7 @@ function Chat() {
       return;
     }
 
-    const checkoutUrl = `http://127.0.0.1:8080/api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`;
+    const checkoutUrl = getApiUrl(`api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`);
     console.log("Redirecting to:", checkoutUrl);
 
     router.push(checkoutUrl);
@@ -161,9 +151,8 @@ function Chat() {
               <div
                 key={plan.id}
                 onClick={() => handlePlanSelect(plan.id)}
-                className={`p-4 bg-white rounded-lg shadow-md mb-4 cursor-pointer transition-all duration-200 ${
-                  selectedPlan === plan.id ? "border-2 border-pink-500" : ""
-                }`}
+                className={`p-4 bg-white rounded-lg shadow-md mb-4 cursor-pointer transition-all duration-200 ${selectedPlan === plan.id ? "border-2 border-pink-500" : ""
+                  }`}
               >
                 <div className="flex justify-between items-center">
                   <div>
@@ -233,11 +222,10 @@ function Chat() {
           <button
             onClick={handle_stripe}
             disabled={isLoading || !selectedPlan}
-            className={`sticky bottom-4 mt-1 w-full text-white text-lg font-bold py-3 rounded-lg shadow-md transition duration-300 ${
-              isLoading || !selectedPlan
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-pink-500 hover:bg-pink-600"
-            }`}
+            className={`sticky bottom-4 mt-1 w-full text-white text-lg font-bold py-3 rounded-lg shadow-md transition duration-300 ${isLoading || !selectedPlan
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-pink-500 hover:bg-pink-600"
+              }`}
           >
             {isLoading ? "Loading..." : "Upgrade Now"} {!isLoading && <i className="fas fa-arrow-right ml-2"></i>}
           </button>

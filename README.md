@@ -244,18 +244,8 @@ The application uses Socket.IO for real-time voice communication between the fro
    - `disconnect` - Client disconnects from the server
    - `heartbeat` - Periodic ping to keep connection alive
 
-2. **Voice Call Events**:
-   - `voice-data` - Client sends voice data to server
-   - `ai-response` - Server sends AI response to client
-   - `end-call` - Client signals end of call
 
-### Voice Processing Pipeline
 
-1. Client captures audio and sends to server via `voice-data` event
-2. Server processes audio using OpenAI Whisper for speech-to-text
-3. Server generates AI response using OpenAI GPT models
-4. Server converts AI response to speech using OpenAI TTS
-5. Server sends audio and text back to client via `ai-response` event
 
 ## Getting Started
 
@@ -322,8 +312,7 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 
-# Optional Configuration
-NEXT_PUBLIC_AGORA_APP_ID=your_agora_app_id (if using Agora)
+
 ```
 
 ### Backend (.env)

@@ -3,6 +3,7 @@ import React from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { apiPost } from "@/services/api";
 
 function Pricing() {
   const router = useRouter();
@@ -13,25 +14,23 @@ function Pricing() {
   const selected_plan = searchParams.get("selected_plan");
 
   async function update_plan(user_id, selected_plan, email) {
-    const formData = new FormData();
-    formData.append("user_id", user_id);
-    formData.append("selected_plan", selected_plan);
-    formData.append("email", email);
+    try {
+      console.log(`${selected_plan} request sent`);
 
-    console.log(`${selected_plan} request sent`);
-    const response = await fetch(
-      "http://127.0.0.1:8080/api/change_subscription",
-      {
-        method: "POST",
-        body: formData,
+      // Use the centralized API service
+      const jsonData = await apiPost("api/change_subscription", {
+        user_id,
+        selected_plan,
+        email
+      });
+
+      console.log(jsonData);
+      const status = jsonData["status"];
+      if (status == "success") {
+        router.push(`/home?email=${email}`);
       }
-    );
-
-    const jsonData = await response.json(); // Parse JSON response
-    console.log(jsonData);
-    const status = jsonData["status"];
-    if (status == "success") {
-      router.push(`/home?email=${email}`);
+    } catch (error) {
+      console.error("Error updating subscription:", error);
     }
   }
 

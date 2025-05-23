@@ -5,6 +5,7 @@ import { X, Heart, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { apiPost } from "@/services/api";
 
 export default function Home() {
   const [user_id, set_user_id] = useState("");
@@ -16,54 +17,44 @@ export default function Home() {
   const urlUserId = searchParams.get("user_id");
 
   async function check_email(email) {
-    // If we already have a user_id from URL, use it
-    if (urlUserId) {
-      console.log("Using user_id from URL:", urlUserId);
-      set_user_id(urlUserId);
+    try {
+      // If we already have a user_id from URL, use it
+      if (urlUserId) {
+        console.log("Using user_id from URL:", urlUserId);
+        set_user_id(urlUserId);
 
-      // Still need to get tokens and subscription status
-      console.log("email request sent");
-      const response = await fetch("http://127.0.0.1:8080/api/check_email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+        // Still need to get tokens and subscription status
+        console.log("email request sent");
+        const jsonData = await apiPost("api/check_email", { email });
 
-      const jsonData = await response.json(); // Parse JSON response
-      console.log(jsonData);
-      const tokens = jsonData["tokens"];
-      const subscribed = jsonData["subscribed"];
-      // Don't automatically redirect to pricing
-      // if (subscribed == "no") {
-      //   router.push(`/pricing?user_id=${urlUserId}&email=${email}`);
-      // }
-      set_tokens(tokens);
-      set_subscribed(subscribed);
-    } else {
-      // No user_id in URL, need to get everything from API
-      console.log("email request sent");
-      const response = await fetch("http://127.0.0.1:8080/api/check_email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+        console.log(jsonData);
+        const tokens = jsonData["tokens"];
+        const subscribed = jsonData["subscribed"];
+        // Don't automatically redirect to pricing
+        // if (subscribed == "no") {
+        //   router.push(`/pricing?user_id=${urlUserId}&email=${email}`);
+        // }
+        set_tokens(tokens);
+        set_subscribed(subscribed);
+      } else {
+        // No user_id in URL, need to get everything from API
+        console.log("email request sent");
+        const jsonData = await apiPost("api/check_email", { email });
 
-      const jsonData = await response.json(); // Parse JSON response
-      console.log(jsonData);
-      const user_id = jsonData["user_id"];
-      const tokens = jsonData["tokens"];
-      const subscribed = jsonData["subscribed"];
-      // Don't automatically redirect to pricing
-      // if (subscribed == "no") {
-      //   router.push(`/pricing?user_id=${user_id}&email=${email}`);
-      // }
-      set_user_id(user_id);
-      set_tokens(tokens);
-      set_subscribed(subscribed);
+        console.log(jsonData);
+        const user_id = jsonData["user_id"];
+        const tokens = jsonData["tokens"];
+        const subscribed = jsonData["subscribed"];
+        // Don't automatically redirect to pricing
+        // if (subscribed == "no") {
+        //   router.push(`/pricing?user_id=${user_id}&email=${email}`);
+        // }
+        set_user_id(user_id);
+        set_tokens(tokens);
+        set_subscribed(subscribed);
+      }
+    } catch (error) {
+      console.error("Error checking email:", error);
     }
   }
 
@@ -504,13 +495,13 @@ export default function Home() {
                 initial={
                   direction
                     ? {
-                        x:
-                          direction === "right"
-                            ? -300
-                            : direction === "left"
+                      x:
+                        direction === "right"
+                          ? -300
+                          : direction === "left"
                             ? 300
                             : 0,
-                      }
+                    }
                     : false
                 }
                 animate={{ x: 0, rotate: 0 }}
@@ -519,8 +510,8 @@ export default function Home() {
                     direction === "right"
                       ? 300
                       : direction === "left"
-                      ? -300
-                      : 0,
+                        ? -300
+                        : 0,
                   rotate:
                     direction === "right" ? 20 : direction === "left" ? -20 : 0,
                 }}

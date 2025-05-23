@@ -170,18 +170,7 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Body**: Raw Clerk webhook event
   - **Response**: Acknowledgment
 
-### Voice Calls
 
-- `POST /api/voice/initiate` - Initiate a voice call session
-
-  - **Auth**: Required in production
-  - **Body**: `{ user_id, companion_name, personality }`
-  - **Response**: Call session information
-
-- `POST /api/voice/end` - End a voice call session
-  - **Auth**: Required in production
-  - **Body**: `{ call_id }`
-  - **Response**: Call session summary
 
 ### System
 
@@ -189,30 +178,7 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Auth**: None (public endpoint)
   - **Response**: Server status information
 
-## Real-time Communication
 
-The backend uses Socket.IO for real-time voice communication with the following event flow:
-
-### Socket Events
-
-1. **Connection Events**:
-
-   - `connection` - Client connects to the server
-   - `disconnect` - Client disconnects from the server
-   - `heartbeat` - Periodic ping to keep connection alive
-
-2. **Voice Call Events**:
-   - `voice-data` - Client sends voice data to server
-   - `ai-response` - Server sends AI response to client
-   - `end-call` - Client signals end of call
-
-### Voice Processing Pipeline
-
-1. Client captures audio and sends to server via `voice-data` event
-2. Server processes audio using OpenAI Whisper for speech-to-text
-3. Server generates AI response using OpenAI GPT models
-4. Server converts AI response to speech using OpenAI TTS
-5. Server sends audio and text back to client via `ai-response` event
 
 ## Environment Variables
 

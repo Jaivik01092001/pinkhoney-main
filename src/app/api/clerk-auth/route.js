@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getApiUrl } from "@/services/api";
 
 export async function POST(request) {
   try {
@@ -13,9 +14,7 @@ export async function POST(request) {
 
     // Call your backend API to create/update user in MongoDB
     const response = await fetch(
-      `${
-        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080"
-      }/api/clerk_sync`,
+      getApiUrl("api/clerk_sync"),
       {
         method: "POST",
         headers: {
