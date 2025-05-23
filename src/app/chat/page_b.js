@@ -124,7 +124,7 @@ function Chat() {
                   rx="14.5"
                   stroke="#E8E6EA"
                 />
-                <g clip-path="url(#clip0_0_2388)">
+                <g clipPath="url(#clip0_0_2388)">
                   <path
                     fillRule="evenodd"
                     clip-rule="evenodd"
