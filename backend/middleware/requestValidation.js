@@ -46,6 +46,7 @@ const userSchemas = {
     email: Joi.string().email().required(),
     user_id: Joi.string().required(),
     selected_plan: Joi.string().valid("monthly", "yearly", "lifetime", "free").required(),
+    session_id: Joi.string().optional(),
   }),
 
   increaseTokens: Joi.object({

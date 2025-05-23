@@ -93,9 +93,9 @@ const checkEmail = async (req, res, next) => {
  */
 const changeSubscription = async (req, res, next) => {
   try {
-    const { user_id, selected_plan, email } = req.body;
+    const { user_id, selected_plan, email, session_id } = req.body;
 
-    console.log("Changing subscription:", { user_id, selected_plan, email });
+    console.log("Changing subscription:", { user_id, selected_plan, email, session_id });
 
     if (!user_id || !selected_plan) {
       return res.status(400).json({
@@ -138,6 +138,33 @@ const changeSubscription = async (req, res, next) => {
     if (selected_plan === "free") {
       subscriptionData.subscribed = "no";
       subscriptionData.subscription.status = "inactive";
+    }
+
+    // If session_id is provided, try to get Stripe customer and subscription IDs
+    if (session_id) {
+      try {
+        // Get the Stripe session to extract customer and subscription IDs
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        const session = await stripe.checkout.sessions.retrieve(session_id);
+
+        if (session) {
+          console.log(`Found Stripe session: ${session.id}`);
+
+          // Add Stripe customer and subscription IDs to the subscription data
+          if (session.customer) {
+            subscriptionData.subscription.stripeCustomerId = session.customer;
+          }
+
+          if (session.subscription) {
+            subscriptionData.subscription.stripeSubscriptionId = session.subscription;
+          }
+
+          console.log("Added Stripe customer and subscription IDs to subscription data");
+        }
+      } catch (stripeError) {
+        console.error("Error retrieving Stripe session:", stripeError);
+        // Continue with the update even if Stripe session retrieval fails
+      }
     }
 
     await updateUser(user.user_id, subscriptionData);

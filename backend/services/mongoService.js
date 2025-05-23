@@ -223,42 +223,125 @@ const findPaymentBySessionIdPattern = async (sessionIdPattern) => {
  */
 const updatePayment = async (stripeSessionId, updateData) => {
   try {
+    console.log(`=== PAYMENT UPDATE STARTED ===`);
     console.log(`Attempting to update payment with stripeSessionId: ${stripeSessionId}`);
     console.log(`Update data:`, JSON.stringify(updateData));
 
-    // First check if the payment exists
+    // First check if the payment exists by exact match
     let existingPayment = await Payment.findOne({ stripeSessionId });
 
-    // If not found by exact match, try to find by pattern
-    if (!existingPayment && stripeSessionId.includes('_')) {
-      // Extract the unique part of the session ID after the last underscore
-      const sessionIdParts = stripeSessionId.split('_');
-      const uniquePart = sessionIdParts[sessionIdParts.length - 1];
+    if (existingPayment) {
+      console.log(`Found payment by exact match. Payment ID: ${existingPayment._id}`);
+    } else {
+      console.log(`No payment found with exact stripeSessionId match: ${stripeSessionId}`);
 
-      if (uniquePart && uniquePart.length > 10) {
-        console.log(`Trying to find payment by unique part of session ID: ${uniquePart}`);
-        existingPayment = await findPaymentBySessionIdPattern(uniquePart);
+      // Try to find by payment intent if provided
+      if (updateData.stripePaymentIntentId) {
+        console.log(`Trying to find payment by payment intent ID: ${updateData.stripePaymentIntentId}`);
+        existingPayment = await Payment.findOne({ stripePaymentIntentId: updateData.stripePaymentIntentId });
+
+        if (existingPayment) {
+          console.log(`Found payment by payment intent ID. Payment ID: ${existingPayment._id}`);
+        }
+      }
+
+      // If still not found and session ID contains underscores, try pattern matching
+      if (!existingPayment && stripeSessionId.includes('_')) {
+        // Extract the unique part of the session ID after the last underscore
+        const sessionIdParts = stripeSessionId.split('_');
+        const uniquePart = sessionIdParts[sessionIdParts.length - 1];
+
+        if (uniquePart && uniquePart.length > 10) {
+          console.log(`Trying to find payment by unique part of session ID: ${uniquePart}`);
+          existingPayment = await findPaymentBySessionIdPattern(uniquePart);
+
+          if (existingPayment) {
+            console.log(`Found payment by pattern matching. Payment ID: ${existingPayment._id}`);
+          }
+        }
+      }
+
+      // If still not found, try case-insensitive regex search
+      if (!existingPayment) {
+        console.log(`Trying case-insensitive regex search for session ID`);
+        existingPayment = await Payment.findOne({
+          stripeSessionId: { $regex: stripeSessionId, $options: 'i' }
+        });
+
+        if (existingPayment) {
+          console.log(`Found payment by case-insensitive search. Payment ID: ${existingPayment._id}`);
+        }
       }
     }
 
     if (!existingPayment) {
-      console.log(`No payment found with stripeSessionId: ${stripeSessionId}`);
+      console.log(`No payment found with any search method for session ID: ${stripeSessionId}`);
       return null;
     }
 
-    console.log(`Found payment record: ${existingPayment._id}, current status: ${existingPayment.status}`);
+    console.log(`Found payment record: ${existingPayment._id}`);
+    console.log(`Current payment details: Status=${existingPayment.status}, Amount=${existingPayment.amount}, Plan=${existingPayment.subscriptionPlan}`);
 
-    // Update the payment
-    const payment = await Payment.findByIdAndUpdate(
-      existingPayment._id,
-      { $set: updateData },
-      { new: true }
-    );
+    // Ensure status is explicitly set to "completed" if that's what we're trying to do
+    if (updateData.status === "completed") {
+      console.log(`Explicitly setting payment status to "completed" for payment ID: ${existingPayment._id}`);
+      updateData.status = "completed";
+    }
 
-    console.log(`Payment updated successfully, new status: ${payment.status}`);
+    // Update the payment with retries
+    let payment = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (!payment && retryCount < maxRetries) {
+      try {
+        payment = await Payment.findByIdAndUpdate(
+          existingPayment._id,
+          { $set: updateData },
+          { new: true }
+        );
+
+        console.log(`Payment updated successfully on attempt ${retryCount + 1}`);
+        console.log(`New payment details: Status=${payment.status}, CustomerID=${payment.stripeCustomerId || 'not set'}`);
+      } catch (updateError) {
+        retryCount++;
+        console.error(`Error updating payment on attempt ${retryCount}:`, updateError);
+
+        if (retryCount >= maxRetries) {
+          throw updateError;
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // Double-check that the update was successful
+    const verifiedPayment = await Payment.findById(existingPayment._id);
+
+    if (verifiedPayment.status !== updateData.status) {
+      console.error(`WARNING: Verification failed! Expected status "${updateData.status}" but found "${verifiedPayment.status}"`);
+
+      // Force one more direct update as a last resort
+      console.log(`Forcing direct update to ensure status is set correctly`);
+      await Payment.updateOne(
+        { _id: existingPayment._id },
+        { $set: { status: updateData.status } }
+      );
+
+      // Verify again
+      const reVerifiedPayment = await Payment.findById(existingPayment._id);
+      console.log(`Re-verification status: ${reVerifiedPayment.status}`);
+    } else {
+      console.log(`Verification successful: Payment status is "${verifiedPayment.status}" as expected`);
+    }
+
+    console.log(`=== PAYMENT UPDATE COMPLETED ===`);
     return payment;
   } catch (error) {
-    console.error("Error updating payment:", error);
+    console.error(`=== PAYMENT UPDATE ERROR ===`);
+    console.error("Error details:", error);
+    console.error("Stack trace:", error.stack);
     throw error;
   }
 };

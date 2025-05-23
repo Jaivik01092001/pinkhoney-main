@@ -42,24 +42,47 @@ function Chat() {
     fetchUserId();
   }, [urlUserId, email]);
 
-  function handle_stripe() {
+  async function handle_stripe() {
     console.log("Current user_id:", user_id);
     console.log("Selected plan:", selectedPlan);
 
-    if (!user_id) {
-      alert("User ID is required. Please try again or go back to the home page.");
-      return;
+    setIsLoading(true);
+
+    try {
+      if (!user_id) {
+        alert("User ID is required. Please try again or go back to the home page.");
+        return;
+      }
+
+      if (!selectedPlan) {
+        alert("Please select a plan first.");
+        return;
+      }
+
+      // Use fetch with the centralized API service
+      const response = await fetch(getApiUrl(`api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`));
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      // For checkout sessions, Stripe returns a URL to redirect to
+      const data = await response.json();
+      console.log("Checkout session created:", data);
+
+      if (data.url) {
+        // Redirect to Stripe checkout page
+        window.location.href = data.url;
+      } else {
+        throw new Error("No checkout URL returned from the server");
+      }
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      alert("There was an error creating your checkout session. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-
-    if (!selectedPlan) {
-      alert("Please select a plan first.");
-      return;
-    }
-
-    const checkoutUrl = getApiUrl(`api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`);
-    console.log("Redirecting to:", checkoutUrl);
-
-    router.push(checkoutUrl);
   }
 
   const plans = [
