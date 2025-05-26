@@ -17,7 +17,9 @@ function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [waitingForNext, setWaitingForNext] = useState(false); // State for delay effect
+  const [isTyping, setIsTyping] = useState(false); // Enhanced typing indicator
+  const [typingDots, setTypingDots] = useState(""); // Animated typing dots
+  const [userName, setUserName] = useState(""); // Store user's name for personalization
 
   // Reference to the chat container for auto-scrolling
   const chatContainerRef = useRef(null);
@@ -33,6 +35,60 @@ function Chat() {
     }
   };
 
+  // Utility function to generate random delay between 2-5 seconds
+  const getRandomTypingDelay = () => {
+    return Math.floor(Math.random() * 3000) + 2000; // 2000-5000ms (2-5 seconds)
+  };
+
+  // Enhanced typing simulation with realistic delays
+  const simulateTyping = async (duration) => {
+    setIsTyping(true);
+
+    // Animate typing dots during the delay
+    const dotInterval = setInterval(() => {
+      setTypingDots(prev => {
+        if (prev === "") return ".";
+        if (prev === ".") return "..";
+        if (prev === "..") return "...";
+        return "";
+      });
+    }, 500); // Change dots every 500ms
+
+    // Wait for the specified duration
+    await new Promise(resolve => setTimeout(resolve, duration));
+
+    // Clean up
+    clearInterval(dotInterval);
+    setIsTyping(false);
+    setTypingDots("");
+  };
+
+  // Simulate a brief pause to make the conversation feel more natural
+  const simulateBriefPause = async () => {
+    await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 400)); // 300-700ms
+  };
+
+  // Fetch user data to personalize greetings
+  const fetchUserData = async () => {
+    if (!email) return;
+
+    try {
+      const data = await apiPost("api/clerk_sync", { email });
+      if (data.user_id) {
+        // Try to get user's first name from the response
+        // Note: The current API doesn't return firstName, but we can enhance it later
+        // For now, we'll extract name from email if available
+        // const emailName = email.split('@')[0];
+        const capitalizedName = data.firstName
+        setUserName(capitalizedName);
+        return capitalizedName;
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+    return null;
+  };
+
   const handleSendMessage = async () => {
     // Use the processMessage function to handle the input
     if (input.trim() !== "") {
@@ -40,7 +96,7 @@ function Chat() {
     }
   };
 
-  // Process a message
+  // Process a message with enhanced typing simulation
   const processMessage = async (messageText) => {
     if (!messageText || messageText.trim() === "") return;
 
@@ -57,8 +113,6 @@ function Chat() {
     setInput("");
     setLoading(true);
 
-    // The scrollToBottom will be triggered by the useEffect that watches messages
-
     try {
       const data = await apiPost("api/get_ai_response", {
         message: messageText,
@@ -70,11 +124,18 @@ function Chat() {
 
       setLoading(false);
 
+      // Process each AI response with realistic typing simulation
       for (let i = 0; i < data.llm_ans.length; i++) {
-        setWaitingForNext(true);
+        // Brief pause before starting to type (makes it feel more natural)
+        await simulateBriefPause();
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Generate random delay for this message (2-5 seconds)
+        const typingDelay = getRandomTypingDelay();
 
+        // Show typing indicator with animated dots
+        await simulateTyping(typingDelay);
+
+        // Add the message after typing simulation
         const botMessage = {
           text: data.llm_ans[i],
           time: new Date().toLocaleTimeString([], {
@@ -85,13 +146,17 @@ function Chat() {
         };
 
         setMessages((prevMessages) => [...prevMessages, botMessage]);
-        // The scrollToBottom will be triggered by the useEffect that watches messages
-        setWaitingForNext(false);
+
+        // Small pause between messages if there are multiple responses
+        if (i < data.llm_ans.length - 1) {
+          await simulateBriefPause();
+        }
       }
     } catch (error) {
       console.error("Error:", error);
       setLoading(false);
-      setWaitingForNext(false);
+      setIsTyping(false);
+      setTypingDots("");
     }
   };
 
@@ -147,7 +212,9 @@ function Chat() {
           setMessages(data.messages);
           // We'll scroll to bottom after messages are loaded in a separate useEffect
         } else {
-          console.log("No chat history found or empty history");
+          console.log("No chat history found or empty history - generating welcome message");
+          // Generate welcome message for new conversations
+          await generateWelcomeMessage();
         }
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -157,10 +224,103 @@ function Chat() {
     loadChatHistory();
   }, [userId, name]);
 
+  // Generate simple welcome message for new conversations with typing simulation
+  const generateWelcomeMessage = async () => {
+    if (!userId || !name) return;
+
+    try {
+      console.log("Generating simple welcome message for", userName);
+
+      // Fetch user data for personalization
+      const fetchedName = await fetchUserData();
+
+      // Brief pause before starting to type (makes it feel more natural)
+      await simulateBriefPause();
+
+      // Generate random delay for the welcome message (2-5 seconds)
+      const typingDelay = getRandomTypingDelay();
+
+      // Show typing indicator with animated dots
+      await simulateTyping(typingDelay);
+
+
+      // Create a personalized welcome message
+      const greeting = fetchedName ? `Hey ${fetchedName}!` : "Hey!";
+      const welcomeMessage = {
+        text: `${greeting} How are you doing today?`,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        sender: "bot",
+      };
+
+      setMessages([welcomeMessage]);
+
+      // Save the welcome message to database for persistence
+      try {
+        await apiPost("api/save_bot_message", {
+          message_text: welcomeMessage.text,
+          name: name,
+          personality: personality || "friendly",
+          user_id: userId,
+          image: image,
+        });
+        console.log("Welcome message saved to database successfully");
+      } catch (saveError) {
+        console.error("Error saving welcome message to database:", saveError);
+        // Continue even if saving fails - user still sees the message
+      }
+
+    } catch (error) {
+      console.error("Error generating welcome message:", error);
+      setIsTyping(false);
+      setTypingDots("");
+
+      // Add a fallback welcome message with typing simulation
+      await simulateBriefPause();
+      const typingDelay = getRandomTypingDelay();
+      await simulateTyping(typingDelay);
+
+      const greeting = userName ? `Hey ${userName}!` : "Hey!";
+      const fallbackMessage = {
+        text: `${greeting} How are you doing today?`,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        sender: "bot",
+      };
+      setMessages([fallbackMessage]);
+
+      // Save the fallback welcome message to database for persistence
+      try {
+        await apiPost("api/save_bot_message", {
+          message_text: fallbackMessage.text,
+          name: name,
+          personality: personality || "friendly",
+          user_id: userId,
+          image: image,
+        });
+        console.log("Fallback welcome message saved to database successfully");
+      } catch (saveError) {
+        console.error("Error saving fallback welcome message to database:", saveError);
+        // Continue even if saving fails - user still sees the message
+      }
+    }
+  };
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-scroll to bottom when typing state changes
+  useEffect(() => {
+    if (isTyping) {
+      scrollToBottom();
+    }
+  }, [isTyping]);
 
   // Auto-scroll to bottom when component mounts
   useEffect(() => {
@@ -181,7 +341,7 @@ function Chat() {
           />
           <div className="bg-black p-2 flex items-center border-b border-gray-800">
             <img
-              src={image}
+              src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${image}`}
               alt="User profile"
               className="w-12 h-12 rounded-full mr-4"
             />
@@ -211,23 +371,18 @@ function Chat() {
               </div>
             ))}
 
-            {/* Typing Indicator */}
-            {loading && (
+            {/* Enhanced Typing Indicator for message composition */}
+            {isTyping && (
               <div className="flex justify-start items-center mb-4">
                 <div className="bg-gray-800 text-white p-3 rounded-lg max-w-xs flex items-center">
-                  <span className="mr-2">Typing</span>
-                  <span className="animate-bounce">.</span>
-                  <span className="animate-bounce delay-200">.</span>
-                  <span className="animate-bounce delay-400">.</span>
-                </div>
-              </div>
-            )}
-
-            {/* Waiting Indicator for next message */}
-            {waitingForNext && (
-              <div className="flex justify-start items-center mb-4">
-                <div className="bg-gray-800 text-white p-3 rounded-lg max-w-xs flex items-center">
-                  <span className="mr-2">...</span>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></div>
+                    <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse delay-150"></div>
+                    <div className="w-2 h-2 bg-white rounded-full mr-3 animate-pulse delay-300"></div>
+                    <span className="text-sm">
+                      {name} is typing{typingDots}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

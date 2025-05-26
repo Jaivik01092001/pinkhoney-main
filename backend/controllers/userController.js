@@ -53,6 +53,8 @@ const checkEmail = async (req, res, next) => {
         user_id: user.user_id,
         tokens: user.tokens,
         subscribed: user.subscribed,
+        firstName: user.firstName,
+        lastName: user.lastName,
       });
     } else {
       // User doesn't exist, create new user

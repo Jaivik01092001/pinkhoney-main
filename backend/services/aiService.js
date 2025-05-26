@@ -10,6 +10,66 @@ const openai = new OpenAI({
 });
 
 /**
+ * Generate AI welcome message for new conversations
+ * @param {string} characterName - AI character name
+ * @param {string} personality - AI personality type
+ * @returns {Promise<Array<string>>} Array of welcome messages
+ */
+const getWelcomeMessage = async (characterName, personality) => {
+  try {
+    // Create a welcome prompt
+    const prompt = `
+      You are ${characterName}, a friendly, emotionally supportive, and engaging AI companion. This is the very first time you're meeting this user, so create a warm, welcoming introduction that reflects your personality.
+
+      ${characterName}'s personality type is ${personality}. Use this personality to tailor your greeting, tone, and introduction style.
+
+      Guidelines for your welcome message:
+      - Introduce yourself as ${characterName}
+      - Be warm and welcoming since this is your first meeting
+      - Show genuine interest in getting to know the user
+      - Reflect your personality type (${personality}) in your greeting style
+      - Keep it friendly and inviting
+      - Ask an engaging question to start the conversation
+
+      SYSTEM: You must use delimiter (|) in your response to separate messages, even if there's only one message.
+
+      Create a personalized welcome message for this new user.
+    `;
+
+    // Call OpenAI API
+    const response = await openai.chat.completions.create({
+      model: config.openai.model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: config.openai.temperature,
+    });
+
+    // Extract and process the response
+    const content = response.choices[0].message.content;
+
+    // Split by delimiter, trim whitespace, and filter out empty messages
+    const messages = content
+      .split("|")
+      .map((msg) => msg.trim())
+      .filter((msg) => msg && msg.length > 0);
+
+    // Ensure we always return at least one message
+    if (messages.length === 0) {
+      console.log(
+        "Warning: AI returned no valid welcome messages, adding default response"
+      );
+      messages.push(`Hi there! I'm ${characterName}, and I'm so excited to meet you! How are you doing today?`);
+    }
+
+    console.log(`Generated ${messages.length} welcome messages for ${characterName}`);
+    return messages;
+  } catch (error) {
+    console.error("Error generating welcome message:", error);
+    // Return a fallback welcome message
+    return [`Hi there! I'm ${characterName}, and I'm so excited to meet you! How are you doing today?`];
+  }
+};
+
+/**
  * Get AI response for user message
  * @param {string} message - User message
  * @param {string} characterName - AI character name
@@ -73,4 +133,5 @@ const getAIResponse = async (message, characterName, personality) => {
 
 module.exports = {
   getAIResponse,
+  getWelcomeMessage,
 };
