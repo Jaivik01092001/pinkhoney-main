@@ -44,13 +44,13 @@ export default function SwipeCard() {
           initial={
             direction
               ? {
-                  x:
-                    direction === "right"
-                      ? -300
-                      : direction === "left"
+                x:
+                  direction === "right"
+                    ? -300
+                    : direction === "left"
                       ? 300
                       : 0,
-                }
+              }
               : false
           }
           animate={{ x: 0, rotate: 0 }}
@@ -65,7 +65,7 @@ export default function SwipeCard() {
           <div className="relative rounded-2xl overflow-hidden shadow-xl">
             {/* Image */}
             <img
-              src={currentProfile.image}
+              src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${currentProfile.image}`}
               alt="Profile"
               className="w-full h-[600px] object-cover"
             />

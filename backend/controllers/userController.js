@@ -16,8 +16,8 @@ const {
  */
 const checkEmail = async (req, res, next) => {
   try {
-    console.log("Request body:", req.body);
-    console.log("Request headers:", req.headers);
+    // console.log("Request body:", req.body);
+    // console.log("Request headers:", req.headers);
 
     const { email, clerkId, firstName, lastName } = req.body;
 
@@ -53,6 +53,8 @@ const checkEmail = async (req, res, next) => {
         user_id: user.user_id,
         tokens: user.tokens,
         subscribed: user.subscribed,
+        firstName: user.firstName,
+        lastName: user.lastName,
       });
     } else {
       // User doesn't exist, create new user

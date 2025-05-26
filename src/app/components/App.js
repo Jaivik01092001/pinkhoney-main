@@ -10,7 +10,7 @@ const App = ({ name, image }) => {
           <div className="relative rounded-2xl overflow-hidden shadow-xl grid place-items-center">
             {/* Image */}
             <img
-              src={image}
+              src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${image}`}
               alt="Profile"
               className="w-full h-[600px] object-cover"
             />
