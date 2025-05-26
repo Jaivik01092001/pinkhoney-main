@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { FaPaperPlane, FaVolumeUp, FaVolumeMute, FaPhone } from "react-icons/fa";
-import { useRouter } from "next/navigation";
-import AudioPlayer from "../../components/AudioPlayer";
+import { FaPaperPlane } from "react-icons/fa";
+import { apiPost, apiGet } from "@/services/api";
+import NavigationBar from "../components/NavigationBar";
 
 function Chat() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const name = searchParams.get("name");
   const personality = searchParams.get("personality");
@@ -19,10 +18,20 @@ function Chat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false); // State for delay effect
-  const [isPlayingResponse, setIsPlayingResponse] = useState(false);
-  const [audioResponse, setAudioResponse] = useState(null);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const audioPlayerRef = useRef(null);
+
+  // Reference to the chat container for auto-scrolling
+  const chatContainerRef = useRef(null);
+
+  // Function to scroll to the bottom of the chat with smooth behavior
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      // Use smooth scrolling for a better user experience
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const handleSendMessage = async () => {
     // Use the processMessage function to handle the input
@@ -30,14 +39,6 @@ function Chat() {
       await processMessage(input);
     }
   };
-
-  function handle_call() {
-    router.push(`/call?name=${name}&personality=${personality}&image=${image}&user_id=${userId}&email=${email}`);
-  }
-
-  function go_to_home() {
-    router.push(`/home?user_id=${userId}&email=${email}`);
-  }
 
   // Process a message
   const processMessage = async (messageText) => {
@@ -56,25 +57,17 @@ function Chat() {
     setInput("");
     setLoading(true);
 
-    try {
-      const response = await fetch(
-        "http://127.0.0.1:8080/api/get_ai_response",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: messageText,
-            name: name,
-            personality: personality,
-            user_id: userId,
-            image: image,
-          }),
-        }
-      );
+    // The scrollToBottom will be triggered by the useEffect that watches messages
 
-      const data = await response.json();
+    try {
+      const data = await apiPost("api/get_ai_response", {
+        message: messageText,
+        name: name,
+        personality: personality,
+        user_id: userId,
+        image: image,
+      });
+
       setLoading(false);
 
       for (let i = 0; i < data.llm_ans.length; i++) {
@@ -92,12 +85,8 @@ function Chat() {
         };
 
         setMessages((prevMessages) => [...prevMessages, botMessage]);
+        // The scrollToBottom will be triggered by the useEffect that watches messages
         setWaitingForNext(false);
-
-        // If voice is enabled, convert the response to speech
-        if (voiceEnabled) {
-          await generateSpeechForText(data.llm_ans[i]);
-        }
       }
     } catch (error) {
       console.error("Error:", error);
@@ -106,46 +95,7 @@ function Chat() {
     }
   };
 
-  // Generate speech for a text response
-  const generateSpeechForText = async (text) => {
-    try {
-      setIsPlayingResponse(true);
 
-      // Call the TTS API
-      const response = await fetch("/api/tts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          voiceId: "bf0a246a-8642-498a-9950-80c35e9276b5", // Default voice ID
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`TTS API error: ${response.status}`);
-      }
-
-      // Get the audio data as ArrayBuffer
-      const audioData = await response.arrayBuffer();
-      setAudioResponse(audioData);
-    } catch (error) {
-      console.error("Error generating speech:", error);
-      setIsPlayingResponse(false);
-    }
-  };
-
-  // Handle audio playback completion
-  const handlePlaybackComplete = () => {
-    setIsPlayingResponse(false);
-    setAudioResponse(null);
-  };
-
-  // Toggle voice mode
-  const toggleVoiceMode = () => {
-    setVoiceEnabled(!voiceEnabled);
-  };
 
   // Fetch user_id if missing but email is available
   useEffect(() => {
@@ -153,22 +103,14 @@ function Chat() {
       if (!userId && email) {
         try {
           console.log("Fetching user_id for email:", email);
-          const response = await fetch("http://127.0.0.1:8080/api/clerk_sync", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ email }),
-          });
-
-          const data = await response.json();
+          const data = await apiPost("api/clerk_sync", { email });
           if (data.user_id) {
             console.log("Retrieved user_id:", data.user_id);
             // Update the URL with the user_id without reloading the page
-            if (typeof window !== 'undefined') {
+            if (typeof window !== "undefined") {
               const newUrl = new URL(window.location.href);
-              newUrl.searchParams.set('user_id', data.user_id);
-              window.history.replaceState({}, '', newUrl.toString());
+              newUrl.searchParams.set("user_id", data.user_id);
+              window.history.replaceState({}, "", newUrl.toString());
             }
 
             // Set the user_id in state
@@ -189,19 +131,23 @@ function Chat() {
       if (!userId || !name) return;
 
       try {
-        console.log("Loading chat history for user:", userId, "and companion:", name);
-        const response = await fetch(
-          `http://127.0.0.1:8080/api/get_chat_history?user_id=${userId}&companion_name=${name}`
+        console.log(
+          "Loading chat history for user:",
+          userId,
+          "and companion:",
+          name
         );
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.messages && data.messages.length > 0) {
-            console.log("Chat history loaded:", data.messages.length, "messages");
-            setMessages(data.messages);
-          } else {
-            console.log("No chat history found or empty history");
-          }
+        const data = await apiGet(`api/get_chat_history?user_id=${userId}&companion_name=${name}`);
+        if (data.success && data.messages && data.messages.length > 0) {
+          console.log(
+            "Chat history loaded:",
+            data.messages.length,
+            "messages"
+          );
+          setMessages(data.messages);
+          // We'll scroll to bottom after messages are loaded in a separate useEffect
+        } else {
+          console.log("No chat history found or empty history");
         }
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -211,14 +157,29 @@ function Chat() {
     loadChatHistory();
   }, [userId, name]);
 
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-scroll to bottom when component mounts
+  useEffect(() => {
+    scrollToBottom();
+  }, []);
+
   return (
     <>
       <div className="min-h-screen">
         <div className="flex flex-col h-screen">
-          <div className="bg-black p-4 flex items-center">
-            <button onClick={go_to_home} className="text-white text-2xl mr-4">
-              {/* Back button SVG */}
-            </button>
+          <NavigationBar
+            type="breadcrumbs"
+            breadcrumbs={[
+              { label: "Matches", url: "/home" },
+              { label: name, url: "" }
+            ]}
+            params={{ user_id: userId, email: email }}
+          />
+          <div className="bg-black p-2 flex items-center border-b border-gray-800">
             <img
               src={image}
               alt="User profile"
@@ -228,16 +189,10 @@ function Chat() {
               <div className="text-white font-bold text-lg">{name}</div>
               <div className="text-green-500 text-sm">Online</div>
             </div>
-            <button
-              className="ml-auto bg-green-600 hover:bg-green-700 text-white p-2 rounded-full"
-              onClick={handle_call}
-            >
-              <FaPhone size={20} />
-            </button>
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -278,18 +233,10 @@ function Chat() {
             )}
           </div>
 
-          {/* Audio Player (hidden but functional) */}
-          {audioResponse && (
-            <AudioPlayer
-              ref={audioPlayerRef}
-              audioData={audioResponse}
-              autoPlay={true}
-              onPlaybackComplete={handlePlaybackComplete}
-            />
-          )}
+
 
           {/* Input Field */}
-          <div className="bg-black p-4 flex items-center sticky bottom-14">
+          <div className="bg-black p-4 flex items-center sticky bottom-14 mt-9">
             <input
               type="text"
               placeholder="Your message"
@@ -299,13 +246,7 @@ function Chat() {
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             />
 
-            {/* Voice Toggle Button */}
-            <button
-              className={`text-2xl mr-2 ${voiceEnabled ? 'text-pink-500' : 'text-gray-500'}`}
-              onClick={toggleVoiceMode}
-            >
-              {voiceEnabled ? <FaVolumeUp /> : <FaVolumeMute />}
-            </button>
+
 
             {/* Send Button */}
             <button

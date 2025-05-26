@@ -18,42 +18,246 @@ The application is designed to help users combat loneliness, find emotional supp
 
 ### Frontend
 
-- **Next.js 14** - React framework for building the user interface
-- **React** - JavaScript library for building user interfaces
-- **TypeScript** - For type-safe JavaScript code
+- **Next.js 14** - React framework with server-side rendering
+- **React** - UI library for building user interfaces
 - **Tailwind CSS** - Utility-first CSS framework for styling
 - **Framer Motion** - Animation library for React
+- **Clerk** - Authentication and user management
+- **Stripe** - Payment processing integration
+- **Socket.IO Client** - Real-time communication
+- **React Query** - Data fetching and state management
+- **Axios** - HTTP client
 
 ### Backend
 
 - **Node.js** - JavaScript runtime environment
-- **Express.js** - Web application framework for Node.js
+- **Express.js** - Web application framework
 - **MongoDB** - NoSQL database for data storage
-- **Mongoose** - MongoDB object modeling for Node.js
-
-### Authentication & User Management
-
+- **Mongoose** - MongoDB object modeling
+- **Socket.IO** - Real-time bidirectional communication
+- **OpenAI Whisper** - Speech-to-text transcription
+- **OpenAI GPT-4o** - AI conversation generation
+- **OpenAI TTS** - Text-to-speech synthesis
+- **Stripe API** - Payment processing and subscription management
 - **Clerk** - Authentication and user management
+- **Joi** - Request validation
+- **Helmet** - Security middleware
 
-### Voice & AI Integration
+## Architecture
 
-- **Realtime AI** - For voice call functionality
+The project follows a modern architecture with clear separation of concerns:
 
-- **OpenAI** - GPT-4o model for AI conversations
+```
+pinkhoney/
+├── backend/            # Express.js backend
+│   ├── config/         # Configuration files
+│   ├── controllers/    # Request handlers
+│   ├── middleware/     # Express middleware
+│   ├── models/         # Data models
+│   ├── routes/         # API routes
+│   ├── services/       # Business logic
+│   ├── utils/          # Utility functions
+│   ├── .env.example    # Example environment variables
+│   ├── index.js        # Main entry point
+│   └── package.json    # Backend dependencies
+├── public/             # Static assets and images
+├── src/                # Frontend source code
+│   ├── app/            # Next.js app directory
+│   │   ├── api/        # Next.js API routes
+│   │   ├── (auth)/     # Authentication pages
+│   │   ├── (dashboard)/# Dashboard pages
+│   │   ├── (marketing)/# Marketing pages
+│   │   ├── components/ # React components
+│   │   ├── all_chats/  # All chats page
+│   │   ├── call/       # Voice call page
+│   │   ├── chat/       # Chat page
+│   │   ├── home/       # Home page with profiles
+│   │   ├── match/      # Match page
+│   │   ├── pricing/    # Subscription plans
+│   │   └── ...         # Other pages
+│   ├── components/     # React components
+│   │   ├── ui/         # UI components
+│   │   ├── forms/      # Form components
+│   │   ├── chat/       # Chat components
+│   │   └── voice/      # Voice call components
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utility functions
+│   ├── providers/      # Context providers
+│   ├── styles/         # Global styles
+│   └── middleware.ts   # Next.js middleware
+├── .next/              # Next.js build output
+├── package.json        # Frontend dependencies
+└── README.md           # Project documentation
+```
 
-### Payment Processing
+## Features
 
-- **Stripe** - Payment processing for subscriptions
+### Core Features
 
-## Installation Instructions
+- **Profile Browsing**: Swipe through AI companion profiles
+- **Matching System**: Match with AI companions that interest you
+- **Text Chat**: Engage in text-based conversations with AI companions
+- **Voice Calls**: Have voice conversations with AI companions
+- **User Authentication**: Secure login and account management
+
+### Chat Interface
+
+The chat interface allows users to:
+
+- Send and receive messages with AI companions
+- View chat history
+- Share images and links
+- Customize companion personalities
+
+### Voice Conversations
+
+The voice conversation feature allows users to:
+
+- Speak directly to AI companions
+- Hear AI responses in natural-sounding voices
+- Have continuous conversations
+- Control voice settings
+
+### Premium Features
+
+- **Unlimited Likes**: No restrictions on how many companions you can like
+- **Super Likes**: Increase your chances of matching
+- **Unlimited Rewinds**: Go back to profiles you accidentally passed
+- **Faster Responses**: Priority processing for your messages
+- **Priority Access**: Early access to new features
+- **Photo Requests**: Request custom photos (coming soon)
+- **Voice Chats**: Enhanced voice interaction (coming soon)
+
+## Middleware System
+
+The backend implements a comprehensive middleware system for security, authentication, and request validation:
+
+### Security Middleware
+
+- **Helmet**: Sets secure HTTP headers to protect against common web vulnerabilities
+- **CORS**: Restricts cross-origin requests to trusted domains
+- **Rate Limiting**: Prevents abuse by limiting requests per IP address
+- **Request Size Limits**: Prevents DoS attacks by limiting request body size
+
+### Authentication Middleware
+
+- **Clerk Middleware**: Authenticates requests using Clerk
+- **User Validation**: Validates and synchronizes user data with the database
+- **Conditional Authentication**: Applies authentication based on environment (development/production)
+
+### Request Validation
+
+- **Joi Schemas**: Validates request data against predefined schemas
+- **Input Sanitization**: Prevents injection attacks by validating input
+- **Structured Error Responses**: Provides consistent error messages
+
+### Error Handling
+
+- **Global Error Handler**: Catches and processes all errors
+- **Detailed Logging**: Logs errors with stack traces in development
+- **Safe Error Responses**: Prevents leaking sensitive information in production
+
+## API Endpoints
+
+All API endpoints are protected with appropriate middleware for authentication, validation, and security.
+
+### User Management
+
+- `POST /api/check_email` - Check user email and subscription status
+
+  - **Auth**: Required in production
+  - **Body**: `{ email, clerkId?, firstName?, lastName? }`
+  - **Response**: User information and subscription status
+
+- `POST /api/change_subscription` - Change user subscription status
+
+  - **Auth**: Required in production
+  - **Body**: `{ email, subscriptionType }`
+  - **Response**: Updated subscription status
+
+- `POST /api/increase_tokens` - Increase user tokens
+  - **Auth**: Required in production
+  - **Body**: `{ email, amount }`
+  - **Response**: Updated token count
+
+### AI Conversations
+
+- `POST /api/get_ai_response` - Get AI response for chat messages
+
+  - **Auth**: Required in production
+  - **Body**: `{ message, name, personality, image, user_id }`
+  - **Response**: AI-generated text response
+
+- `GET /api/get_chat_history` - Get chat history for a user and companion
+  - **Auth**: Required in production
+  - **Query**: `user_id, companion_name`
+  - **Response**: Array of chat messages
+
+### Voice Calls
+
+- `POST /api/voice/initiate` - Initiate a voice call session
+
+  - **Auth**: Required in production
+  - **Body**: `{ user_id, companion_name, personality }`
+  - **Response**: Call session information
+
+- `POST /api/voice/end` - End a voice call session
+  - **Auth**: Required in production
+  - **Body**: `{ call_id }`
+  - **Response**: Call session summary
+
+### Payments
+
+- `GET /api/create_checkout_session` - Create Stripe checkout session
+
+  - **Auth**: None (public endpoint)
+  - **Query**: `{ priceId?, email?, plan?, success_url?, cancel_url? }`
+  - **Response**: Stripe checkout session URL
+
+- `POST /api/webhook` - Handle Stripe webhook events
+  - **Auth**: Stripe signature verification
+  - **Body**: Raw Stripe webhook event
+  - **Response**: Acknowledgment
+
+### Authentication
+
+- `POST /api/clerk-webhook` - Handle Clerk authentication webhook events
+  - **Auth**: Clerk signature verification
+  - **Body**: Raw Clerk webhook event
+  - **Response**: Acknowledgment
+
+### System
+
+- `GET /health` - Server health check
+  - **Auth**: None (public endpoint)
+  - **Response**: Server status information
+
+## Real-time Communication
+
+The application uses Socket.IO for real-time voice communication between the frontend and backend:
+
+### Socket Events
+
+1. **Connection Events**:
+
+   - `connection` - Client connects to the server
+   - `disconnect` - Client disconnects from the server
+   - `heartbeat` - Periodic ping to keep connection alive
+
+
+
+
+## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+ and npm
 - MongoDB database (local or Atlas)
+- OpenAI API key
+- Stripe account and API keys
 - Clerk account for authentication
 
-### Setup Steps
+### Installation
 
 1. Clone the repository:
 
@@ -77,22 +281,9 @@ cd ..
 ```
 
 4. Set up environment variables:
-   - Create a `.env.local` file in the root directory for the frontend:
 
-```
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-CLERK_SECRET_KEY=your_clerk_secret_key
-
-# Backend URL (for API calls)
-BACKEND_URL=http://localhost:8080
-```
-
-- Create a `.env` file in the backend directory:
-
-```
-# Copy from backend/.env.example and fill in your values
-```
+   - Create a `.env.local` file in the root directory for the frontend
+   - Create a `.env` file in the backend directory
 
 5. Start the backend server:
 
@@ -107,101 +298,35 @@ npm run dev
 npm run dev
 ```
 
-## Available Scripts
-
-- `npm run dev` - Start the development server
-- `npm run build` - Build the application for production
-- `npm run start` - Start the production server
-- `npm run lint` - Run ESLint to check code quality
-
-## Folder Structure
-
-```
-pinkhoney/
-├── backend/            # Express.js backend
-│   ├── config/         # Configuration files
-│   ├── controllers/    # Request handlers
-│   ├── middleware/     # Express middleware
-│   ├── models/         # Data models
-│   ├── routes/         # API routes
-│   ├── services/       # Business logic
-│   ├── utils/          # Utility functions
-│   ├── .env.example    # Example environment variables
-│   ├── index.js        # Main entry point
-│   └── package.json    # Backend dependencies
-├── public/             # Static assets and images
-├── src/                # Frontend source code
-│   ├── app/            # Next.js app directory
-│   │   ├── api/        # Next.js API routes
-│   │   ├── components/ # React components
-│   │   ├── all_chats/  # All chats page
-│   │   ├── call/       # Voice call page
-│   │   ├── chat/       # Chat page
-│   │   ├── home/       # Home page with profiles
-│   │   ├── match/      # Match page
-│   │   ├── pricing/    # Subscription plans
-│   │   └── ...         # Other pages
-│   └── middleware.ts   # Next.js middleware
-├── .next/              # Next.js build output
-├── package.json        # Frontend dependencies
-└── README.md           # Project documentation
-```
-
-## Features
-
-### Core Features
-
-- **Profile Browsing**: Swipe through AI companion profiles
-- **Matching System**: Match with AI companions that interest you
-- **Text Chat**: Engage in text-based conversations with AI companions
-- **Voice Calls**: Have voice conversations with AI companions
-- **User Authentication**: Secure login and account management
-
-### Premium Features
-
-- **Unlimited Likes**: No restrictions on how many companions you can like
-- **Super Likes**: Increase your chances of matching
-- **Unlimited Rewinds**: Go back to profiles you accidentally passed
-- **Faster Responses**: Priority processing for your messages
-- **Priority Access**: Early access to new features
-- **Photo Requests**: Request custom photos (coming soon)
-- **Voice Chats**: Enhanced voice interaction (coming soon)
-
-## API Endpoints
-
-### Backend API (Express.js Server)
-
-- `POST /api/check_email` - Check user email and subscription status
-- `POST /api/get_ai_response` - Get AI response for chat messages
-- `GET /api/get_chat_history` - Get chat history for a user and companion
-- `POST /api/change_subscription` - Change user subscription status
-- `POST /api/increase_tokens` - Increase user tokens
-- `GET /api/create_checkout_session` - Create Stripe checkout session
-- `POST /api/webhook` - Handle Stripe webhook events
-- `POST /api/clerk-webhook` - Handle Clerk authentication webhook events
-- `GET /health` - Server health check
-
-### Next.js API Routes
-
-- `POST /api/connect` - Connect to voice call service
-
-- `POST /api/clerk-auth` - Handle Clerk authentication in Next.js
+7. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Environment Variables
 
 ### Frontend (.env.local)
 
 ```
+# API Configuration
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+
 # Clerk Authentication
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
+
 
 ```
 
 ### Backend (.env)
 
 ```
-# OpenAI API
+# Server Configuration
+PORT=8080
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+
+# MongoDB Configuration
+MONGODB_URI=mongodb://localhost:27017/pinkhoney
+
+# OpenAI API Configuration
 OPENAI_API_KEY=your_openai_api_key_here
 
 # Stripe Configuration
@@ -215,18 +340,9 @@ STRIPE_LIFETIME_PRICE_ID=price_lifetime_id_here
 STRIPE_YEARLY_PRICE_ID=price_yearly_id_here
 STRIPE_MONTHLY_PRICE_ID=price_monthly_id_here
 
-# MongoDB Configuration
-MONGODB_URI=mongodb://localhost:27017/pinkhoney
-
 # Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key_here
 CLERK_SECRET_KEY=your_clerk_secret_key_here
 CLERK_WEBHOOK_SECRET=your_clerk_webhook_secret_here
-
-# Server Configuration
-PORT=8080
-NODE_ENV=development
-FRONTEND_URL=http://localhost:3000
 ```
 
 ## MongoDB Integration
@@ -238,13 +354,11 @@ Pink Honey uses MongoDB for data storage with the following collections:
 - **companions**: Stores AI companion profiles and personalities
 - **payments**: Stores payment records and subscription details
 
-The application uses Mongoose for object modeling and database interactions. When users sign up with Clerk authentication, corresponding user entries need to be created in MongoDB through the Clerk webhook system. The application handles this through:
+The application uses Mongoose for object modeling and database interactions. When users sign up with Clerk authentication, corresponding user entries are created in MongoDB through:
 
 1. A Clerk webhook endpoint that receives user creation events
 2. The `/api/clerk-auth` Next.js API route that syncs Clerk user data with MongoDB
 3. The `/api/check_email` endpoint that creates or updates user records in MongoDB
-
-This ensures that all authenticated users have corresponding entries in the MongoDB database for storing chat history, subscription status, and other user-specific data.
 
 ## Stripe Integration
 
@@ -252,31 +366,16 @@ The application uses Stripe for payment processing with the following features:
 
 - Secure checkout sessions for subscription payments
 - Webhook handling for payment events
-- Customer name and address collection for compliance with Indian regulations
+- Customer name and address collection for compliance with regulations
 - Automatic subscription management
 
-### Indian Regulatory Compliance
-
-For users in India, Stripe checkout sessions are configured to collect additional information to comply with Indian export regulations:
-
-- Customer name is required for all transactions
-- Billing address is collected for all transactions
-- The checkout session is configured with `customer_creation: 'always'` to ensure proper customer records
-- Payment methods are limited to those supported in India
-
-## Subscription Plans
+### Subscription Plans
 
 Pink Honey offers three subscription tiers:
 
 - **Lifetime**: $99.99 one-time payment
 - **Yearly**: $99.99/year
 - **Monthly**: $19.99/month
-
-## Credits
-
-- **Design & Development**: Pink Honey Team
-- **AI Integration**: Powered by Anthropic Claude
-- **Voice Technology**: Realtime AI
 
 ## API Testing with Postman
 
@@ -293,35 +392,12 @@ A Postman collection is included in the repository for testing the API endpoints
 
 3. Use the collection to test the various API endpoints
 
-The collection is organized into the following folders:
+## Available Scripts
 
-- **User Management**: Endpoints for managing user data and subscriptions
-
-  - `POST /api/check_email` - Check user email and subscription status
-  - `POST /api/change_subscription` - Update user subscription status
-  - `POST /api/increase_tokens` - Increase user tokens
-
-- **AI Responses**: Endpoints for AI conversation functionality
-
-  - `POST /api/get_ai_response` - Get AI response for chat messages
-  - `GET /api/get_chat_history` - Get chat history for a user and companion
-
-- **Payments**: Endpoints for payment processing with Stripe
-
-  - `GET /api/create_checkout_session` - Create Stripe checkout session
-  - `POST /api/webhook` - Handle Stripe webhook events
-
-- **Authentication**: Endpoints for authentication with Clerk
-
-  - `POST /api/clerk-webhook` - Handle Clerk authentication webhook events
-  - `POST /api/clerk-auth` - Handle Clerk authentication in Next.js
-
-- **Voice**: Endpoints for voice call functionality
-
-  - `POST /api/connect` - Connect to voice call service
-
-- **System**: System-related endpoints
-  - `GET /health` - Server health check
+- `npm run dev` - Start the development server
+- `npm run build` - Build the application for production
+- `npm run start` - Start the production server
+- `npm run lint` - Run ESLint to check code quality
 
 ## License
 

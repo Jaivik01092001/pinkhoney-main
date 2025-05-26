@@ -5,6 +5,9 @@ import { X, Heart, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { apiPost } from "@/services/api";
+import NavigationBar from "../components/NavigationBar";
+import useLocalStorage from "@/hooks/useLocalStorage";
 
 export default function Home() {
   const [user_id, set_user_id] = useState("");
@@ -16,54 +19,44 @@ export default function Home() {
   const urlUserId = searchParams.get("user_id");
 
   async function check_email(email) {
-    // If we already have a user_id from URL, use it
-    if (urlUserId) {
-      console.log("Using user_id from URL:", urlUserId);
-      set_user_id(urlUserId);
+    try {
+      // If we already have a user_id from URL, use it
+      if (urlUserId) {
+        console.log("Using user_id from URL:", urlUserId);
+        set_user_id(urlUserId);
 
-      // Still need to get tokens and subscription status
-      console.log("email request sent");
-      const response = await fetch("http://127.0.0.1:8080/api/check_email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+        // Still need to get tokens and subscription status
+        console.log("email request sent");
+        const jsonData = await apiPost("api/check_email", { email });
 
-      const jsonData = await response.json(); // Parse JSON response
-      console.log(jsonData);
-      const tokens = jsonData["tokens"];
-      const subscribed = jsonData["subscribed"];
-      // Don't automatically redirect to pricing
-      // if (subscribed == "no") {
-      //   router.push(`/pricing?user_id=${urlUserId}&email=${email}`);
-      // }
-      set_tokens(tokens);
-      set_subscribed(subscribed);
-    } else {
-      // No user_id in URL, need to get everything from API
-      console.log("email request sent");
-      const response = await fetch("http://127.0.0.1:8080/api/check_email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+        console.log(jsonData);
+        const tokens = jsonData["tokens"];
+        const subscribed = jsonData["subscribed"];
+        // Don't automatically redirect to pricing
+        // if (subscribed == "no") {
+        //   router.push(`/pricing?user_id=${urlUserId}&email=${email}`);
+        // }
+        set_tokens(tokens);
+        set_subscribed(subscribed);
+      } else {
+        // No user_id in URL, need to get everything from API
+        console.log("email request sent");
+        const jsonData = await apiPost("api/check_email", { email });
 
-      const jsonData = await response.json(); // Parse JSON response
-      console.log(jsonData);
-      const user_id = jsonData["user_id"];
-      const tokens = jsonData["tokens"];
-      const subscribed = jsonData["subscribed"];
-      // Don't automatically redirect to pricing
-      // if (subscribed == "no") {
-      //   router.push(`/pricing?user_id=${user_id}&email=${email}`);
-      // }
-      set_user_id(user_id);
-      set_tokens(tokens);
-      set_subscribed(subscribed);
+        console.log(jsonData);
+        const user_id = jsonData["user_id"];
+        const tokens = jsonData["tokens"];
+        const subscribed = jsonData["subscribed"];
+        // Don't automatically redirect to pricing
+        // if (subscribed == "no") {
+        //   router.push(`/pricing?user_id=${user_id}&email=${email}`);
+        // }
+        set_user_id(user_id);
+        set_tokens(tokens);
+        set_subscribed(subscribed);
+      }
+    } catch (error) {
+      console.error("Error checking email:", error);
     }
   }
 
@@ -414,33 +407,83 @@ export default function Home() {
     },
   ]);
 
-  function shuffleProfiles(profiles) {
-    return profiles
-      .map((profile) => ({ profile, sort: Math.random() })) // Add random sort key
-      .sort((a, b) => a.sort - b.sort) // Sort based on random key
-      .map(({ profile }) => profile); // Extract shuffled profiles
-  }
-
+  // Display profiles in sequential order by ID
   useEffect(() => {
-    const shuffeled_profiles = shuffleProfiles(profiles);
-    set_original_profiles(shuffeled_profiles);
+    // Sort profiles by ID to ensure consistent sequential order
+    const sortedProfiles = [...profiles].sort((a, b) => a.id - b.id);
+    set_original_profiles(sortedProfiles);
   }, []); // Ensure this runs only once on component mount
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Create user-specific localStorage keys
+  const userProfileIndexKey = `user_${user_id || 'guest'}_currentProfileIndex`;
+  const userProfileHistoryKey = `user_${user_id || 'guest'}_profileHistory`;
+
+  // Use localStorage to persist the current profile index and history
+  const [currentIndex, setCurrentIndex] = useLocalStorage(userProfileIndexKey, 0);
   const [direction, setDirection] = useState(null);
+  // Add state to track profile history for the "swipe back" feature with persistence
+  const [profileHistory, setProfileHistory] = useLocalStorage(userProfileHistoryKey, []);
+
+  // Ensure the currentIndex is valid (in case the number of profiles has changed)
+  useEffect(() => {
+    if (profiles.length > 0 && currentIndex >= profiles.length) {
+      setCurrentIndex(0); // Reset to first profile if the saved index is out of bounds
+    }
+  }, [profiles, currentIndex, setCurrentIndex]);
+
+  // Update localStorage keys when user_id changes
+  useEffect(() => {
+    // This effect will run when user_id changes after initial load
+    if (user_id) {
+      // We don't need to do anything special here since the keys are derived from user_id
+      // The useLocalStorage hook will handle loading the correct data when the key changes
+      console.log("User ID updated, localStorage keys updated for persistence");
+    }
+  }, [user_id]);
 
   const currentProfile = profiles[currentIndex];
 
   const swipe = (direction, name, personality, image) => {
     setDirection(direction);
-    setTimeout(() => {
-      setDirection(null);
-      setCurrentIndex((prev) => (prev + 1) % profiles.length);
-    }, 300);
-    if (direction == "right") {
+
+    // Save current index to history before changing it
+    setProfileHistory(prev => [...prev, currentIndex]);
+
+    if (direction === "right") {
+      // For right swipe (heart icon), only navigate to match page without advancing to next profile
+      setTimeout(() => {
+        setDirection(null);
+        // Don't advance to next profile when going to match page
+      }, 300);
+
       router.push(
         `/match?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`
       );
+    } else {
+      // For other swipe directions, advance to next profile
+      setTimeout(() => {
+        setDirection(null);
+        setCurrentIndex((prev) => (prev + 1) % profiles.length);
+      }, 300);
+    }
+  };
+
+  // Function to handle going back to the previous profile
+  const swipeBack = () => {
+    if (profileHistory.length > 0) {
+      // Get the last index from history
+      const prevIndex = profileHistory[profileHistory.length - 1];
+
+      // Set direction for animation
+      setDirection("back");
+
+      // Remove the last index from history
+      setProfileHistory(prev => prev.slice(0, -1));
+
+      setTimeout(() => {
+        setDirection(null);
+        setCurrentIndex(prevIndex);
+      }, 300);
     }
   };
 
@@ -451,8 +494,14 @@ export default function Home() {
   return (
     <>
       <div className="min-h-screen">
-        <div className="flex items-center justify-center gap-3 text-pink-500 font-semibold">
-          {/* <div className="w-2 h-2 rounded-full bg-pink-500" /> */}
+        <NavigationBar
+          type="breadcrumbs"
+          breadcrumbs={[{ label: "Home", url: "" }]}
+          params={{ user_id: user_id, email: email }}
+          className="mb-2"
+        />
+
+        <div className="flex items-center justify-center gap-3 text-pink-500 font-semibold mt-4">
           <svg
             width="19"
             height="32"
@@ -509,6 +558,8 @@ export default function Home() {
                             ? -300
                             : direction === "left"
                             ? 300
+                            : direction === "back"
+                            ? -300
                             : 0,
                       }
                     : false
@@ -520,9 +571,17 @@ export default function Home() {
                       ? 300
                       : direction === "left"
                       ? -300
+                      : direction === "back"
+                      ? 300
                       : 0,
                   rotate:
-                    direction === "right" ? 20 : direction === "left" ? -20 : 0,
+                    direction === "right"
+                      ? 20
+                      : direction === "left"
+                      ? -20
+                      : direction === "back"
+                      ? 20
+                      : 0,
                 }}
                 transition={{ duration: 0.3 }}
                 className="absolute w-full"
@@ -546,55 +605,49 @@ export default function Home() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-6">
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-4">
+                      {/* Swipe Back Button */}
                       <button
-                        onClick={() => swipe("left")}
-                        className="w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
+                        onClick={swipeBack}
+                        disabled={profileHistory.length === 0}
+                        className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${
+                          profileHistory.length === 0
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-gray-100"
+                        }`}
                       >
                         <svg
-                          width="32"
-                          height="32"
-                          viewBox="0 0 32 32"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
-                            d="M16 27.6667C13.4373 27.6632 10.9806 26.6436 9.16851 24.8315C7.35642 23.0194 6.33684 20.5627 6.33331 18C6.33331 17.7348 6.43867 17.4804 6.62621 17.2929C6.81374 17.1054 7.0681 17 7.33331 17C7.59853 17 7.85288 17.1054 8.04042 17.2929C8.22796 17.4804 8.33331 17.7348 8.33331 18C8.33331 19.5163 8.78296 20.9986 9.62538 22.2594C10.4678 23.5202 11.6652 24.5028 13.0661 25.0831C14.467 25.6634 16.0085 25.8152 17.4957 25.5194C18.9829 25.2235 20.3489 24.4934 21.4211 23.4212C22.4933 22.349 23.2235 20.9829 23.5193 19.4957C23.8152 18.0085 23.6633 16.467 23.0831 15.0661C22.5028 13.6652 21.5201 12.4678 20.2594 11.6254C18.9986 10.783 17.5163 10.3333 16 10.3333H12.6666C12.4014 10.3333 12.1471 10.228 11.9595 10.0405C11.772 9.85291 11.6666 9.59856 11.6666 9.33334C11.6666 9.06813 11.772 8.81377 11.9595 8.62624C12.1471 8.4387 12.4014 8.33334 12.6666 8.33334H16C18.5637 8.33334 21.0225 9.35179 22.8353 11.1646C24.6482 12.9775 25.6666 15.4363 25.6666 18C25.6666 20.5638 24.6482 23.0225 22.8353 24.8354C21.0225 26.6482 18.5637 27.6667 16 27.6667Z"
-                            fill="#FE506B"
-                          />
-                          <path
-                            d="M16 14.3333C15.8686 14.3339 15.7384 14.3083 15.6171 14.2579C15.4957 14.2076 15.3856 14.1335 15.2933 14.04L11.2933 10.04C11.106 9.85249 11.0009 9.59833 11.0009 9.33332C11.0009 9.06832 11.106 8.81416 11.2933 8.62666L15.2933 4.62666C15.3849 4.52841 15.4953 4.44961 15.6179 4.39495C15.7406 4.34029 15.873 4.3109 16.0073 4.30854C16.1415 4.30617 16.2749 4.33087 16.3994 4.38116C16.524 4.43146 16.6371 4.50632 16.732 4.60127C16.827 4.69623 16.9018 4.80934 16.9521 4.93386C17.0024 5.05838 17.0271 5.19175 17.0248 5.32602C17.0224 5.46029 16.993 5.59271 16.9383 5.71538C16.8837 5.83804 16.8049 5.94844 16.7066 6.03999L13.4133 9.33332L16.7066 12.6267C16.8939 12.8142 16.9991 13.0683 16.9991 13.3333C16.9991 13.5983 16.8939 13.8525 16.7066 14.04C16.6143 14.1335 16.5042 14.2076 16.3829 14.2579C16.2615 14.3083 16.1314 14.3339 16 14.3333Z"
+                            d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
                             fill="#FE506B"
                           />
                         </svg>
                       </button>
-                      {/* Dislike Button */}
+
+                      {/* Swipe Next Button */}
                       <button
                         onClick={() => swipe("left")}
                         className="w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
                       >
                         <svg
-                          width="32"
-                          height="32"
-                          viewBox="0 0 32 32"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
+                          style={{ transform: 'rotate(180deg)' }}
                         >
                           <path
-                            fillRule="evenodd"
-                            clip-rule="evenodd"
-                            d="M16.7907 31.0107L16.776 31.0133L16.6813 31.06L16.6547 31.0653L16.636 31.06L16.5413 31.0133C16.5271 31.0089 16.5165 31.0111 16.5093 31.02L16.504 31.0333L16.4813 31.604L16.488 31.6307L16.5013 31.648L16.64 31.7467L16.66 31.752L16.676 31.7467L16.8147 31.648L16.8307 31.6267L16.836 31.604L16.8133 31.0347C16.8098 31.0204 16.8022 31.0124 16.7907 31.0107ZM17.144 30.86L17.1267 30.8627L16.88 30.9867L16.8667 31L16.8627 31.0147L16.8867 31.588L16.8933 31.604L16.904 31.6133L17.172 31.7373C17.1889 31.7418 17.2018 31.7382 17.2107 31.7267L17.216 31.708L17.1707 30.8893C17.1662 30.8733 17.1573 30.8635 17.144 30.86ZM16.1907 30.8627C16.1848 30.8591 16.1778 30.8579 16.1711 30.8594C16.1644 30.8609 16.1585 30.8649 16.1547 30.8707L16.1467 30.8893L16.1013 31.708C16.1022 31.724 16.1098 31.7347 16.124 31.74L16.144 31.7373L16.412 31.6133L16.4253 31.6027L16.4307 31.588L16.4533 31.0147L16.4493 30.9987L16.436 30.9853L16.1907 30.8627Z"
-                            fill="#FE506B"
-                          />
-                          <path
-                            fillRule="evenodd"
-                            clip-rule="evenodd"
-                            d="M16 18.8293L23.0707 25.9C23.4459 26.2752 23.9547 26.486 24.4853 26.486C25.0159 26.486 25.5248 26.2752 25.9 25.9C26.2752 25.5248 26.486 25.0159 26.486 24.4853C26.486 23.9547 26.2752 23.4459 25.9 23.0707L18.8267 16L25.8987 8.92933C26.0844 8.74355 26.2316 8.52302 26.3321 8.28032C26.4326 8.03763 26.4842 7.77752 26.4842 7.51486C26.4841 7.25219 26.4323 6.99211 26.3317 6.74946C26.2312 6.50681 26.0838 6.28635 25.898 6.10066C25.7122 5.91497 25.4917 5.76769 25.249 5.66723C25.0063 5.56677 24.7462 5.5151 24.4835 5.51516C24.2209 5.51522 23.9608 5.56702 23.7181 5.66759C23.4755 5.76817 23.255 5.91555 23.0693 6.10133L16 13.172L8.92933 6.10133C8.74493 5.91022 8.52431 5.75776 8.28035 5.65282C8.0364 5.54789 7.77398 5.4926 7.50843 5.49017C7.24287 5.48773 6.97949 5.53821 6.73365 5.63866C6.48781 5.7391 6.26444 5.88751 6.07657 6.0752C5.88869 6.2629 5.74008 6.48613 5.6394 6.73188C5.53873 6.97762 5.488 7.24095 5.49018 7.50651C5.49236 7.77207 5.54741 8.03453 5.65211 8.27859C5.75681 8.52265 5.90907 8.74341 6.1 8.92799L13.1733 16L6.10133 23.072C5.9104 23.2566 5.75815 23.4773 5.65344 23.7214C5.54874 23.9655 5.49369 24.2279 5.49151 24.4935C5.48933 24.759 5.54006 25.0224 5.64074 25.2681C5.74141 25.5139 5.89003 25.7371 6.0779 25.9248C6.26577 26.1125 6.48914 26.2609 6.73498 26.3613C6.98082 26.4618 7.2442 26.5123 7.50976 26.5098C7.77532 26.5074 8.03773 26.4521 8.28169 26.3472C8.52565 26.2422 8.74626 26.0898 8.93067 25.8987L16 18.8293Z"
+                            d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
                             fill="#FE506B"
                           />
                         </svg>
-
-                        {/* <X className="w-8 h-8 text-gray-600" /> */}
                       </button>
 
                       {/* Like Button */}
@@ -621,8 +674,6 @@ export default function Home() {
                             fill="white"
                           />
                         </svg>
-
-                        {/* <Heart className="w-8 h-8 text-white" /> */}
                       </button>
 
                       {/* Favorite Button */}
@@ -642,8 +693,6 @@ export default function Home() {
                             fill="#672653"
                           />
                         </svg>
-
-                        {/* <Star className="w-8 h-8 text-purple-500" /> */}
                       </button>
                     </div>
                   </div>
@@ -700,30 +749,30 @@ export default function Home() {
                 d="M22 12C22 17.5229 17.5229 22 12 22C9.01325 22 2 22 2 22C2 22 2 14.5361 2 12C2 6.47715 6.47715 2 12 2C17.5229 2 22 6.47715 22 12Z"
                 fill="#ADAFBB"
                 stroke="#ADAFBB"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
               <path
                 d="M7 9H16"
                 stroke="white"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
               <path
                 d="M7 13H16"
                 stroke="white"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
               <path
                 d="M7 17H12"
                 stroke="white"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </svg>
 
@@ -743,17 +792,17 @@ export default function Home() {
                 d="M12 10C13.933 10 15.5 8.433 15.5 6.5C15.5 4.56701 13.933 3 12 3C10.067 3 8.5 4.56701 8.5 6.5C8.5 8.433 10.067 10 12 10Z"
                 fill="#ADAFBB"
                 stroke="#ADAFBB"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
               <path
                 d="M3 20.4V21H21V20.4C21 18.1598 21 17.0397 20.5641 16.184C20.1806 15.4314 19.5686 14.8195 18.816 14.436C17.9603 14 16.8402 14 14.6 14H9.4C7.1598 14 6.0397 14 5.18405 14.436C4.43139 14.8195 3.81947 15.4314 3.43598 16.184C3 17.0397 3 18.1598 3 20.4Z"
                 fill="#ADAFBB"
                 stroke="#ADAFBB"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </svg>
 

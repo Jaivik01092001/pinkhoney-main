@@ -1,23 +1,15 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
 const mongoose = require("mongoose");
 const http = require("http");
-const { Server } = require("socket.io");
 const { errorHandler } = require("./middleware/errorHandler");
 const connectDB = require("./config/database");
-const { clerkMiddleware } = require('@clerk/express');
-const { speechToText, textToSpeech } = require("./services/speechService");
-const { getAIResponse } = require("./services/aiService");
 
 // Import routes
 const aiRoutes = require("./routes/aiRoutes");
 const userRoutes = require("./routes/userRoutes");
-const stripeRoutes = require("./routes/stripeRoutes");
+const { router: stripeRoutes } = require("./routes/stripeRoutes");
 const clerkRoutes = require("./routes/clerkRoutes");
-const voiceRoutes = require("./routes/voiceRoutes");
 
 // Connect to MongoDB
 connectDB();
@@ -25,418 +17,293 @@ connectDB();
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST"],
-    credentials: true
-  },
-  // Improve connection stability
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  transports: ['websocket', 'polling'],
-  allowUpgrades: true,
-  upgradeTimeout: 10000,
-  maxHttpBufferSize: 5e6 // 5MB max buffer size for audio data
-});
 const PORT = process.env.PORT || 8080; // Default to 8080 to match frontend expectations
 
 // Middleware
-app.use(helmet()); // Security headers
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use(morgan("dev")); // Request logging
+// Import security middleware
+const {
+  helmetMiddleware,
+  apiLimiter,
+  authMiddleware,
+} = require("./middleware/securityMiddleware");
+const corsMiddleware = require("./middleware/cors");
+const logger = require("./middleware/logger");
 
-app.use(
-  clerkMiddleware({
-    secretKey: process.env.CLERK_SECRET_KEY,   // same env var as before
-  })
-);
+// Apply security middleware
+app.use(helmetMiddleware);
+app.use(corsMiddleware);
+app.use("/api", apiLimiter);
 
-// Routes
+// Request logging
+app.use(logger);
+
+// Special handling for Stripe webhook route - must be before body parsers
+// This ensures the raw body is preserved for signature verification
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log("=== STRIPE WEBHOOK REQUEST RECEIVED ===");
+  console.log("Headers:", JSON.stringify(req.headers));
+
+  try {
+    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+    const signature = req.headers["stripe-signature"];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_2c8ebd59de1c9060e086ae553b9b3f853aae0c96b81d33902cb2240d6371f338';
+
+    console.log(`Webhook secret: ${webhookSecret.substring(0, 10)}...`);
+    console.log(`Signature present: ${!!signature}`);
+    console.log(`Body is buffer: ${Buffer.isBuffer(req.body)}`);
+
+    // Check if the body is a buffer
+    if (!Buffer.isBuffer(req.body)) {
+      console.error("Request body is not a buffer. This will cause signature verification to fail.");
+      return res.status(200).json({ success: false, error: 'Request body is not a buffer' });
+    }
+
+    // Check if the body contains HTML instead of JSON
+    const bodyPreview = req.body.toString('utf8', 0, 100).trim();
+    if (bodyPreview.startsWith('<!DOCTYPE') || bodyPreview.startsWith('<html')) {
+      console.error("Received HTML instead of JSON. This might indicate a redirect or error page.");
+      console.log("HTML content preview:", bodyPreview);
+      return res.status(200).json({ success: false, error: 'Received HTML instead of JSON webhook data' });
+    }
+
+    let event;
+
+    try {
+      // Verify the signature
+      event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+      console.log(`Webhook verified! Event type: ${event.type}`);
+    } catch (verifyError) {
+      console.error(`⚠️ Webhook signature verification failed:`, verifyError.message);
+
+      // Check if the error is due to HTML content
+      if (verifyError.message && verifyError.message.includes("Unexpected token '<'")) {
+        console.error("Received HTML instead of JSON. This might indicate a redirect or error page.");
+        return res.status(200).json({ success: false, error: 'Received HTML instead of JSON webhook data' });
+      }
+
+      // In development, try to parse the payload without verification
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const rawBody = req.body.toString('utf8');
+          event = JSON.parse(rawBody);
+          console.log(`Parsed event in development mode: ${event.type}`);
+        } catch (parseError) {
+          console.error(`Failed to parse webhook payload:`, parseError);
+          return res.status(400).json({ success: false, error: 'Webhook verification failed: ' + parseError.message });
+        }
+      } else {
+        return res.status(400).json({ success: false, error: 'Webhook verification failed: ' + verifyError.message });
+      }
+    }
+
+    // Handle the event - focus on checkout.session.completed
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      console.log(`Processing checkout.session.completed for session ID: ${session.id}`);
+      console.log(`Session details:`, JSON.stringify(session, null, 2));
+
+      // Direct database update
+      try {
+        const Payment = require('./models/Payment');
+        const User = require('./models/User');
+
+        // Find the payment record
+        let payment = await Payment.findOne({ stripeSessionId: session.id });
+
+        if (!payment) {
+          console.log(`Payment not found with session ID ${session.id}, trying alternative search...`);
+
+          // Try with payment intent
+          if (session.payment_intent) {
+            payment = await Payment.findOne({ stripePaymentIntentId: session.payment_intent });
+          }
+
+          // If still not found, try pattern matching
+          if (!payment && session.id.includes('_')) {
+            const sessionIdParts = session.id.split('_');
+            const uniquePart = sessionIdParts[sessionIdParts.length - 1];
+
+            if (uniquePart && uniquePart.length > 5) {
+              console.log(`Trying to find payment with pattern: ${uniquePart}`);
+              payment = await Payment.findOne({
+                stripeSessionId: { $regex: uniquePart, $options: 'i' }
+              });
+            }
+          }
+        }
+
+        if (payment) {
+          console.log(`Found payment record: ${payment._id}, current status: ${payment.status}`);
+
+          // Update payment status to completed
+          const updateResult = await Payment.updateOne(
+            { _id: payment._id },
+            {
+              $set: {
+                status: "completed",
+                stripeCustomerId: session.customer,
+                stripePaymentIntentId: session.payment_intent
+              }
+            }
+          );
+
+          console.log(`Payment update result:`, updateResult);
+
+          // Verify the update
+          const updatedPayment = await Payment.findById(payment._id);
+          console.log(`Payment status after update: ${updatedPayment.status}`);
+
+          // Update user subscription
+          if (payment.user_id) {
+            const user = await User.findOne({ user_id: payment.user_id });
+
+            if (user) {
+              console.log(`Updating subscription for user: ${user.user_id}`);
+
+              const subscriptionData = {
+                subscribed: "yes",
+                subscription: {
+                  plan: payment.subscriptionPlan,
+                  startDate: new Date(),
+                  endDate: payment.subscriptionPlan === "lifetime"
+                    ? null
+                    : payment.subscriptionPlan === "yearly"
+                      ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  status: "active",
+                  stripeCustomerId: session.customer,
+                  stripeSubscriptionId: session.subscription,
+                }
+              };
+
+              const userUpdateResult = await User.updateOne(
+                { user_id: payment.user_id },
+                { $set: subscriptionData }
+              );
+
+              console.log(`User subscription update result:`, userUpdateResult);
+            } else {
+              console.log(`User not found with ID: ${payment.user_id}`);
+            }
+          }
+        } else {
+          console.log(`No payment record found for session ID: ${session.id}`);
+
+          // Create a new payment record if we can extract user info
+          const metadata = session.metadata || {};
+          const user_id = metadata.user_id || session.client_reference_id;
+          const email = metadata.email || session.customer_email || session.customer_details?.email;
+
+          if (user_id && email) {
+            console.log(`Creating new payment record for user: ${user_id}, email: ${email}`);
+
+            const newPayment = new Payment({
+              user_id,
+              email,
+              amount: session.amount_total || 1000,
+              currency: session.currency || "usd",
+              status: "completed",
+              stripeSessionId: session.id,
+              stripeCustomerId: session.customer,
+              stripePaymentIntentId: session.payment_intent,
+              subscriptionPlan: metadata.plan || "monthly",
+            });
+
+            await newPayment.save();
+            console.log(`Created new payment record with ID: ${newPayment._id}`);
+
+            // Update user subscription
+            const user = await User.findOne({ user_id });
+
+            if (user) {
+              console.log(`Updating subscription for user: ${user.user_id}`);
+
+              const subscriptionData = {
+                subscribed: "yes",
+                subscription: {
+                  plan: newPayment.subscriptionPlan,
+                  startDate: new Date(),
+                  endDate: newPayment.subscriptionPlan === "lifetime"
+                    ? null
+                    : newPayment.subscriptionPlan === "yearly"
+                      ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  status: "active",
+                  stripeCustomerId: session.customer,
+                  stripeSubscriptionId: session.subscription,
+                }
+              };
+
+              const userUpdateResult = await User.updateOne(
+                { user_id },
+                { $set: subscriptionData }
+              );
+
+              console.log(`User subscription update result:`, userUpdateResult);
+            }
+          } else {
+            console.log(`Cannot create payment record: missing user_id or email`);
+          }
+        }
+      } catch (dbError) {
+        console.error(`Database error while processing webhook:`, dbError);
+      }
+    }
+
+    // Return a 200 response to acknowledge receipt of the event
+    res.status(200).json({ received: true });
+  } catch (error) {
+    console.error(`Webhook error:`, error);
+    // Return a 200 response to prevent Stripe from retrying
+    res.status(200).json({ received: true, error: error.message });
+  }
+});
+
+// Body parsers with size limits to prevent abuse - applied after webhook route
+app.use(express.json({ limit: "1mb" })); // Parse JSON bodies with size limit
+app.use(express.urlencoded({ extended: true, limit: "1mb" })); // Parse URL-encoded bodies with size limit
+
+// Apply Clerk authentication middleware (except for webhook route which is handled separately)
+app.use((req, res, next) => {
+  // Skip authentication for webhook endpoint
+  if (req.path === '/api/webhook') {
+    return next();
+  }
+  authMiddleware(req, res, next);
+});
+
+// Special route for Stripe webhook with raw body parsing
+app.post("/api/webhook", express.raw({ type: 'application/json' }), (req, res) => {
+  const { webhookHandler } = require("./routes/stripeRoutes");
+  webhookHandler(req, res, (err) => {
+    if (err) {
+      console.error("Error in webhook handler:", err);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+  });
+});
+
+// Regular API routes
 app.use("/api", aiRoutes);
 app.use("/api", userRoutes);
-app.use("/api", stripeRoutes);
+app.use("/api", (req, res, next) => {
+  // Skip the webhook route as it's handled separately
+  if (req.path === '/webhook' && req.method === 'POST') {
+    return next('route');
+  }
+  next();
+}, stripeRoutes);
 app.use("/api", clerkRoutes);
-app.use("/api", voiceRoutes);
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_, res) => {
   res.status(200).json({ status: "ok", message: "Server is running" });
 });
 
 // Error handling middleware
 app.use(errorHandler);
 
-// Socket.IO event handlers
-io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.id}`);
 
-  // Set up a heartbeat to keep the connection alive
-  let heartbeatInterval = setInterval(() => {
-    socket.emit('heartbeat', { timestamp: Date.now() });
-  }, 20000); // Send heartbeat every 20 seconds
-
-  // Track conversation state for each socket
-  const conversationState = {
-    isProcessing: false,
-    queue: [],
-    lastProcessedTime: 0,
-    processingTimeout: null,
-    lastValidTranscription: '',
-    transcriptionHistory: [], // Keep track of recent transcriptions
-    conversationTurn: 0, // Track conversation turns (0 = start, odd = user, even = AI)
-    lastResponseTime: Date.now() // Track when the last response was sent
-  };
-
-  // Process the next item in the queue
-  const processNextInQueue = async () => {
-    // Clear any existing timeout
-    if (conversationState.processingTimeout) {
-      clearTimeout(conversationState.processingTimeout);
-      conversationState.processingTimeout = null;
-    }
-
-    // Check if queue is empty or already processing
-    if (conversationState.queue.length === 0 || conversationState.isProcessing) {
-      return;
-    }
-
-    // Implement a cooldown period to prevent processing items too quickly
-    const now = Date.now();
-    const timeSinceLastProcess = now - conversationState.lastProcessedTime;
-    const MIN_PROCESS_INTERVAL = 1000; // 1 second minimum between processing
-
-    if (timeSinceLastProcess < MIN_PROCESS_INTERVAL) {
-      // Wait for the cooldown to complete before processing
-      const waitTime = MIN_PROCESS_INTERVAL - timeSinceLastProcess;
-      console.log(`Waiting ${waitTime}ms before processing next item`);
-
-      conversationState.processingTimeout = setTimeout(() => {
-        processNextInQueue();
-      }, waitTime);
-
-      return;
-    }
-
-    // Set processing flag to prevent concurrent processing
-    conversationState.isProcessing = true;
-    conversationState.lastProcessedTime = now;
-
-    // Get the next item from the queue
-    const data = conversationState.queue.shift();
-
-    try {
-      console.log("Processing voice data from queue");
-
-      // Get the audio format from the data or default to 'raw'
-      const audioFormat = data.audio_format || 'raw';
-      console.log(`Using audio format: ${audioFormat}`);
-
-      // Convert speech to text
-      const text = await speechToText(data.audio, audioFormat);
-      console.log(`Transcribed text: ${text}`);
-
-      // Store the last valid transcription for comparison
-      if (!conversationState.lastValidTranscription) {
-        conversationState.lastValidTranscription = '';
-      }
-
-      // Validate the transcribed text
-      const isValidText = (text) => {
-        // Check if the text contains error messages
-        if (text.includes("I couldn't understand") || text.includes("Error processing")) {
-          console.log("Transcription contains error messages, rejecting");
-          return false;
-        }
-
-        // Check if the text is empty or too short (at least 3 characters)
-        if (!text.trim() || text.trim().length < 3) {
-          console.log("Transcription too short, rejecting");
-          return false;
-        }
-
-        // Count words in the text
-        const wordCount = text.trim().split(/\s+/).length;
-
-        // Reject transcriptions with fewer than 2 words
-        if (wordCount < 2) {
-          console.log(`Transcription has only ${wordCount} word(s), rejecting as too short`);
-          return false;
-        }
-
-        // Check for common transcription errors like "Thanks for watching"
-        const commonErrors = [
-          "thanks for watching",
-          "please subscribe",
-          "like and subscribe",
-          "click the link",
-          "in the description",
-          "thank you for watching",
-          "don't forget to subscribe",
-          "hit the like button"
-        ];
-
-        // Check if the text contains any of the common errors
-        for (const error of commonErrors) {
-          if (text.toLowerCase().includes(error)) {
-            console.log(`Detected common transcription error: "${error}"`);
-            return false;
-          }
-        }
-
-        // Check if this is a duplicate or fragment of the previous transcription
-        if (conversationState.lastValidTranscription) {
-          // If the current text is a substring of the last valid transcription
-          if (conversationState.lastValidTranscription.toLowerCase().includes(text.toLowerCase())) {
-            console.log(`Transcription "${text}" is a fragment of previous transcription, rejecting`);
-            return false;
-          }
-
-          // If the current text is very similar to the last valid transcription
-          const similarity = calculateTextSimilarity(text, conversationState.lastValidTranscription);
-          if (similarity > 0.7) { // 70% similarity threshold
-            console.log(`Transcription too similar to previous (${Math.round(similarity * 100)}% similar), rejecting`);
-            return false;
-          }
-        }
-
-        // Store this as the last valid transcription for future comparisons
-        conversationState.lastValidTranscription = text;
-
-        return true;
-      };
-
-      // Calculate similarity between two strings (0-1 scale)
-      const calculateTextSimilarity = (str1, str2) => {
-        // Convert to lowercase for case-insensitive comparison
-        const s1 = str1.toLowerCase();
-        const s2 = str2.toLowerCase();
-
-        // If either string is empty, return 0
-        if (!s1.length || !s2.length) return 0;
-
-        // If the strings are identical, return 1
-        if (s1 === s2) return 1;
-
-        // Calculate Levenshtein distance
-        const track = Array(s2.length + 1).fill(null).map(() =>
-          Array(s1.length + 1).fill(null));
-
-        for (let i = 0; i <= s1.length; i += 1) {
-          track[0][i] = i;
-        }
-
-        for (let j = 0; j <= s2.length; j += 1) {
-          track[j][0] = j;
-        }
-
-        for (let j = 1; j <= s2.length; j += 1) {
-          for (let i = 1; i <= s1.length; i += 1) {
-            const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
-            track[j][i] = Math.min(
-              track[j][i - 1] + 1, // deletion
-              track[j - 1][i] + 1, // insertion
-              track[j - 1][i - 1] + indicator, // substitution
-            );
-          }
-        }
-
-        // Calculate similarity as 1 - normalized distance
-        const maxLength = Math.max(s1.length, s2.length);
-        const distance = track[s2.length][s1.length];
-        return 1 - (distance / maxLength);
-      };
-
-      // If the transcribed text is not valid, send an error message back
-      if (!isValidText(text)) {
-        console.log("Invalid transcription detected, sending error response");
-
-        // Generate a friendly response for failed transcription
-        const errorResponse = "I'm sorry, I couldn't understand what you said. Could you please try speaking again?";
-
-        // Try to generate audio for the error message
-        let errorAudio = null;
-        try {
-          errorAudio = await textToSpeech(errorResponse);
-        } catch (audioError) {
-          console.error("Error generating speech for error message:", audioError);
-        }
-
-        // Increment conversation turn for error response
-        conversationState.conversationTurn++;
-
-        socket.emit("ai-response", {
-          text: errorResponse,
-          audio: errorAudio,
-          conversationTurn: conversationState.conversationTurn,
-          userTranscript: text // Include the user's transcribed text even for errors
-        });
-
-        // Mark as done processing
-        conversationState.isProcessing = false;
-
-        // Process next item if available
-        processNextInQueue();
-        return;
-      }
-
-      // Increment conversation turn (odd = user, even = AI)
-      conversationState.conversationTurn++;
-
-      // Get AI response
-      const aiResponses = await getAIResponse(text, data.companion_name, data.personality);
-      const aiResponse = aiResponses[0]; // Get the first response
-      console.log(`AI response: ${aiResponse}`);
-
-      // Update last response time
-      conversationState.lastResponseTime = Date.now();
-
-      // Try to convert AI response to speech, but don't fail if it doesn't work
-      let audioBuffer = null;
-      try {
-        audioBuffer = await textToSpeech(aiResponse);
-      } catch (ttsError) {
-        console.error("Error in text-to-speech, falling back to browser TTS:", ttsError);
-      }
-
-      // Send the audio response back to the client
-      // If audioBuffer is null, the client will use browser's SpeechSynthesis
-      socket.emit("ai-response", {
-        text: aiResponse,
-        audio: audioBuffer,
-        conversationTurn: conversationState.conversationTurn,
-        userTranscript: text // Include the user's transcribed text
-      });
-
-      // Mark as done processing
-      conversationState.isProcessing = false;
-
-      // Process next item if available
-      processNextInQueue();
-    } catch (error) {
-      console.error("Error processing voice data:", error);
-      socket.emit("error", { message: "Failed to process voice data" });
-
-      // Mark as done processing even if there was an error
-      conversationState.isProcessing = false;
-
-      // Process next item if available
-      processNextInQueue();
-    }
-  };
-
-  // Handle voice data from client
-  socket.on("voice-data", async (data) => {
-    console.log("Received voice data from client");
-
-    // Check if we have the required data
-    if (!data || !data.audio) {
-      console.log("No audio data received");
-      socket.emit("error", { message: "No audio data received" });
-      return;
-    }
-
-    // Log basic info about the received audio
-    console.log("Received audio data:",
-      typeof data.audio === 'string' ? `${data.audio.length} bytes` : 'invalid format');
-
-    // Skip processing if the audio data is too small
-    if (typeof data.audio === 'string' && data.audio.length < 500) {
-      console.warn("Audio data too small, skipping");
-      socket.emit("ai-response", {
-        text: "I couldn't hear anything. Could you please try speaking again?",
-        audio: null
-      });
-      return;
-    }
-
-    // Implement a maximum queue size to prevent memory issues
-    const MAX_QUEUE_SIZE = 2;
-
-    // If the queue is already at max capacity, remove the oldest item
-    if (conversationState.queue.length >= MAX_QUEUE_SIZE) {
-      console.warn(`Queue at maximum capacity (${MAX_QUEUE_SIZE}), removing oldest item`);
-      conversationState.queue.shift(); // Remove the oldest item
-    }
-
-    // Add to queue
-    conversationState.queue.push(data);
-    console.log(`Added to queue. Queue length: ${conversationState.queue.length}`);
-
-    // If not currently processing, start processing the queue
-    if (!conversationState.isProcessing) {
-      processNextInQueue();
-    } else {
-      console.log("Already processing, item will be processed when current processing completes");
-    }
-
-    // Set a timeout to clear the queue if it gets stuck
-    const QUEUE_TIMEOUT = 30000; // 30 seconds
-    setTimeout(() => {
-      if (conversationState.isProcessing && conversationState.queue.length > 0) {
-        console.warn("Processing timeout reached, resetting processing state");
-        conversationState.isProcessing = false;
-        processNextInQueue();
-      }
-    }, QUEUE_TIMEOUT);
-  });
-
-  // Handle call end
-  socket.on("end-call", () => {
-    console.log(`Call ended by user: ${socket.id}`);
-
-    // Clean up any pending timeouts
-    if (conversationState.processingTimeout) {
-      clearTimeout(conversationState.processingTimeout);
-      conversationState.processingTimeout = null;
-    }
-
-    // Clear the heartbeat interval
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-      heartbeatInterval = null;
-    }
-
-    // Clear the queue
-    conversationState.queue = [];
-    conversationState.isProcessing = false;
-
-    // Send a final message to the client before disconnecting
-    socket.emit('call-ended', { message: 'Call ended by user' });
-
-    // Disconnect the socket
-    socket.disconnect();
-  });
-
-  // Handle disconnection
-  socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
-
-    // Clean up any pending timeouts
-    if (conversationState.processingTimeout) {
-      clearTimeout(conversationState.processingTimeout);
-      conversationState.processingTimeout = null;
-    }
-
-    // Clear the heartbeat interval
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-      heartbeatInterval = null;
-    }
-
-    // Clear the queue to free up memory
-    conversationState.queue = [];
-    conversationState.isProcessing = false;
-  });
-});
 
 // Start server
 server.listen(PORT, () => {

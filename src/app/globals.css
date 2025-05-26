@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.send-keep-swiping-button {
+    width: 20%;
+    margin: auto;
+}
