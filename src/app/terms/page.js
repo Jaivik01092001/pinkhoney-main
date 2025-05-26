@@ -10,14 +10,15 @@ import {
   UserButton,
   SignUpButton,
   useSignIn,
-  useUser 
+  useUser
 } from '@clerk/nextjs'
+import NavigationBar from '../components/NavigationBar';
 
 const Terms = () => {
   const { user } = useUser();
   const router = useRouter()
 
-  
+
     // useEffect(() => {
     //   if (user) {
     //     const email = user.primaryEmailAddress?.emailAddress;
@@ -57,8 +58,15 @@ const Terms = () => {
 
   return (
     <>
+      <NavigationBar
+        type="back"
+        backUrl="/"
+        title="Terms & Guidelines"
+        className="mb-4"
+      />
+
       <div className="bg-gradient-to-b">
-        <div className="p-6 max-w-md mx-auto text-center space-y-6 pt-20">
+        <div className="p-6 max-w-md mx-auto text-center space-y-6 pt-10">
           <div className="flex items-center justify-center gap-2 text-pink-500 font-semibold">
             {/* <div className="w-2 h-2 rounded-full bg-pink-500" /> */}
             <svg width="19" height="32" viewBox="0 0 19 32" fill="none" xmlns="http://www.w3.org/2000/svg">

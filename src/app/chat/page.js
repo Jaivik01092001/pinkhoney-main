@@ -1,17 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { FaPaperPlane } from "react-icons/fa";
-import { useRouter } from "next/navigation";
+import { apiPost, apiGet } from "@/services/api";
+import NavigationBar from "../components/NavigationBar";
 
 function Chat() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const name = searchParams.get("name");
   const personality = searchParams.get("personality");
   const image = searchParams.get("image");
-  const user_id = searchParams.get("user_id");
+  const [userId, setUserId] = useState(searchParams.get("user_id") || "");
   const email = searchParams.get("email");
 
   const [messages, setMessages] = useState([]);
@@ -19,42 +19,74 @@ function Chat() {
   const [loading, setLoading] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false); // State for delay effect
 
+  // Reference to the chat container for auto-scrolling
+  const chatContainerRef = useRef(null);
+
+  // Function to scroll to the bottom of the chat with smooth behavior
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      // Use smooth scrolling for a better user experience
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (input.trim() === "") return;
+    // Use the processMessage function to handle the input
+    if (input.trim() !== "") {
+      await processMessage(input);
+    }
+  };
+
+  // Process a message
+  const processMessage = async (messageText) => {
+    if (!messageText || messageText.trim() === "") return;
 
     const newMessage = {
-      text: input,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: messageText,
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       sender: "user",
     };
-    setMessages([...messages, newMessage]);
+
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
     setInput("");
     setLoading(true);
 
+    // The scrollToBottom will be triggered by the useEffect that watches messages
+
     try {
-      const response = await fetch("http://127.0.0.1:8080/get_ai_response", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: input, name: name, personality: personality }),
+      const data = await apiPost("api/get_ai_response", {
+        message: messageText,
+        name: name,
+        personality: personality,
+        user_id: userId,
+        image: image,
       });
 
-      const data = await response.json();
       setLoading(false);
 
       for (let i = 0; i < data.llm_ans.length; i++) {
-        setWaitingForNext(true); // Show "..." while waiting for the next message
+        setWaitingForNext(true);
 
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2-second delay
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         const botMessage = {
           text: data.llm_ans[i],
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           sender: "bot",
         };
+
         setMessages((prevMessages) => [...prevMessages, botMessage]);
-        setWaitingForNext(false); // Hide "..." after message appears
+        // The scrollToBottom will be triggered by the useEffect that watches messages
+        setWaitingForNext(false);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -63,40 +95,119 @@ function Chat() {
     }
   };
 
-  function handle_call() {
-    router.push(`/call?name=${name}&personality=${personality}&image=${image}`);
-  }
 
-  function go_to_home() {
-    router.push(`/home?user_id=${user_id}&email=${email}`);
-  }
+
+  // Fetch user_id if missing but email is available
+  useEffect(() => {
+    const fetchUserIdIfMissing = async () => {
+      if (!userId && email) {
+        try {
+          console.log("Fetching user_id for email:", email);
+          const data = await apiPost("api/clerk_sync", { email });
+          if (data.user_id) {
+            console.log("Retrieved user_id:", data.user_id);
+            // Update the URL with the user_id without reloading the page
+            if (typeof window !== "undefined") {
+              const newUrl = new URL(window.location.href);
+              newUrl.searchParams.set("user_id", data.user_id);
+              window.history.replaceState({}, "", newUrl.toString());
+            }
+
+            // Set the user_id in state
+            setUserId(data.user_id);
+          }
+        } catch (error) {
+          console.error("Error fetching user_id:", error);
+        }
+      }
+    };
+
+    fetchUserIdIfMissing();
+  }, [userId, email]);
+
+  // Load chat history when component mounts or userId changes
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!userId || !name) return;
+
+      try {
+        console.log(
+          "Loading chat history for user:",
+          userId,
+          "and companion:",
+          name
+        );
+        const data = await apiGet(`api/get_chat_history?user_id=${userId}&companion_name=${name}`);
+        if (data.success && data.messages && data.messages.length > 0) {
+          console.log(
+            "Chat history loaded:",
+            data.messages.length,
+            "messages"
+          );
+          setMessages(data.messages);
+          // We'll scroll to bottom after messages are loaded in a separate useEffect
+        } else {
+          console.log("No chat history found or empty history");
+        }
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    };
+
+    loadChatHistory();
+  }, [userId, name]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-scroll to bottom when component mounts
+  useEffect(() => {
+    scrollToBottom();
+  }, []);
 
   return (
     <>
       <div className="min-h-screen">
         <div className="flex flex-col h-screen">
-          <div className="bg-black p-4 flex items-center">
-            <button onClick={go_to_home} className="text-white text-2xl mr-4">
-              {/* Back button SVG */}
-            </button>
-            <img src={image} alt="User profile" className="w-12 h-12 rounded-full mr-4" />
+          <NavigationBar
+            type="breadcrumbs"
+            breadcrumbs={[
+              { label: "Matches", url: "/home" },
+              { label: name, url: "" }
+            ]}
+            params={{ user_id: userId, email: email }}
+          />
+          <div className="bg-black p-2 flex items-center border-b border-gray-800">
+            <img
+              src={image}
+              alt="User profile"
+              className="w-12 h-12 rounded-full mr-4"
+            />
             <div>
               <div className="text-white font-bold text-lg">{name}</div>
               <div className="text-green-500 text-sm">Online</div>
             </div>
-            <button className="ml-4" onClick={handle_call}>
-              {/* Call button SVG */}
-            </button>
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
             {messages.map((message, index) => (
-              <div key={index} className={`flex ${message.sender === "user" ? "justify-end" : ""} mb-4`}>
-                <div className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"} text-white p-3 rounded-lg max-w-xs`}>
+              <div
+                key={index}
+                className={`flex ${message.sender === "user" ? "justify-end" : ""
+                  } mb-4`}
+              >
+                <div
+                  className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
+                    } text-white p-3 rounded-lg max-w-xs`}
+                >
                   {message.text}
                 </div>
-                <div className="text-gray-500 text-xs ml-2 self-end">{message.time}</div>
+                <div className="text-gray-500 text-xs ml-2 self-end">
+                  {message.time}
+                </div>
               </div>
             ))}
 
@@ -122,17 +233,27 @@ function Chat() {
             )}
           </div>
 
+
+
           {/* Input Field */}
-          <div className="bg-black p-4 flex items-center sticky bottom-14">
+          <div className="bg-black p-4 flex items-center sticky bottom-14 mt-9">
             <input
               type="text"
               placeholder="Your message"
               className="flex-grow bg-gray-800 text-white p-3 rounded-lg mr-4"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             />
-            <button className="text-green-500 text-2xl" onClick={handleSendMessage}>
+
+
+
+            {/* Send Button */}
+            <button
+              className="text-green-500 text-2xl mr-2"
+              onClick={handleSendMessage}
+              disabled={input.trim() === ""}
+            >
               <FaPaperPlane />
             </button>
           </div>
