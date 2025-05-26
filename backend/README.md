@@ -261,6 +261,60 @@ Pink Honey uses MongoDB for data storage with the following collections:
 
 The application uses Mongoose for object modeling and database interactions. When users sign up with Clerk authentication, corresponding user entries are automatically created in MongoDB.
 
+### Database Seeding
+
+The application includes automatic database seeding that runs when the server starts:
+
+#### Auto-Seeding on Server Start
+
+When you start the backend server, it automatically checks if AI companions exist in the database and seeds them if needed:
+
+```bash
+npm run dev  # Companions are automatically seeded if database is empty
+```
+
+**Auto-Seeding Features:**
+- **Automatic**: Runs every time the server starts
+- **Idempotent**: Safe to run multiple times without creating duplicates
+- **Non-blocking**: Server continues to start even if seeding fails
+- **Smart Detection**: Only seeds if fewer than 10 companions exist
+
+#### Manual Seeding (Optional)
+
+You can also run the companion seeder manually:
+
+```bash
+node seeders/companionSeeder.js
+```
+
+**Manual Seeding Features:**
+- **Idempotent**: Safe to run multiple times without creating duplicates
+- **Diverse Characters**: 10 unique AI companions with different personality archetypes
+- **Complete Data**: All required and optional fields populated with realistic values
+- **Error Handling**: Comprehensive error handling with helpful guidance
+
+**Characters Created:**
+1. Luna (25) - Creative artist and poet
+2. Marcus (32) - Tech enthusiast and problem solver
+3. Sophia (28) - Wellness coach and mindfulness expert
+4. Kai (24) - Adventurous traveler and outdoor enthusiast
+5. Elena (30) - Intellectual conversationalist with cultural expertise
+6. Zara (26) - Fashion expert and confidence coach
+7. Oliver (35) - Business mentor and entrepreneur
+8. Maya (23) - Musical creative performer
+9. Alex (29) - Fitness coach and sports enthusiast
+10. Iris (27) - Emotional support specialist
+
+#### Legacy Seeder
+
+The original seeder script creates both users and companions:
+
+```bash
+npm run seed
+```
+
+For more details about database seeding, see the [seeders documentation](./seeders/README.md).
+
 ## Stripe Integration
 
 The application uses Stripe for payment processing with the following features:

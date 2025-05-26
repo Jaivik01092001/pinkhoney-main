@@ -5,7 +5,7 @@ import { X, Heart, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { apiPost } from "@/services/api";
+import { apiPost, apiGet } from "@/services/api";
 import NavigationBar from "../components/NavigationBar";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
@@ -68,350 +68,39 @@ export default function Home() {
     }
   }, [email, urlUserId, router]); // Run when email, urlUserId, or router changes
 
-  const [profiles, set_original_profiles] = useState([
-    {
-      id: 1,
-      name: "Amara",
-      personality: "Confident and playful",
-      image: "/Amara3-ps.jpg.jpg",
-    },
-    {
-      id: 2,
-      name: "Amaya",
-      personality: "Calm, grounded, and nature-oriented",
-      image: "/Amaya2.jpg",
-    },
-    {
-      id: 3,
-      name: "Aria",
-      personality: "Shy and introspective",
-      image: "/Aria3.jpg",
-    },
-    {
-      id: 4,
-      name: "Ava",
-      personality: "Shy and loyal",
-      image: "/Ava3-ps.jpg.jpg",
-    },
-    {
-      id: 5,
-      name: "Aya",
-      personality: "Shy and loyal",
-      image: "/Aya1-ps.jpg.jpg",
-    },
-    {
-      id: 6,
-      name: "Bree",
-      personality: "Caregiver and lover",
-      image: "/Bree1-ps.jpg.jpg",
-    },
-    {
-      id: 7,
-      name: "Bree",
-      personality: "Caregiver and lover",
-      image: "/Bree2-ps.jpgjpg.jpg",
-    },
-    {
-      id: 8,
-      name: "Briana",
-      personality: "Caregiver and lover",
-      image: "/Briana1-ps.jpg.jpg",
-    },
-    {
-      id: 9,
-      name: "Camila",
-      personality: "Caregiver and lover",
-      image: "/Camila-ps.jpg.jpg",
-    },
-    {
-      id: 10,
-      name: "Claire",
-      personality: "Caregiver and lover",
-      image: "/Claire-ps.jpgjpg.jpg",
-    },
-    {
-      id: 11,
-      name: "Dani",
-      personality: "Caregiver and lover",
-      image: "/Dani2.jpg",
-    },
-    {
-      id: 12,
-      name: "Eden",
-      personality: "Caregiver and lover",
-      image: "/Eden2-ps.jpgjpg.jpg",
-    },
-    {
-      id: 13,
-      name: "Elara",
-      personality: "Caregiver and lover",
-      image: "/Elara.jpg",
-    },
-    {
-      id: 14,
-      name: "Emi",
-      personality: "Caregiver and lover",
-      image: "/Emi3-ps.jpgjpg.jpg",
-    },
-    {
-      id: 15,
-      name: "Emily",
-      personality: "Caregiver and lover",
-      image: "/Emily2.jpg",
-    },
-    {
-      id: 16,
-      name: "Emma",
-      personality: "Caregiver and lover",
-      image: "/Emma2-ps.jpgjpg.jpg",
-    },
-    {
-      id: 17,
-      name: "Grace",
-      personality: "Caregiver and lover",
-      image: "/Grace3-ps.jpgjpg.jpg",
-    },
-    {
-      id: 18,
-      name: "Harper",
-      personality: "Caregiver and lover",
-      image: "/Harper-ps.jpg.jpg",
-    },
-    {
-      id: 19,
-      name: "Iris",
-      personality: "Caregiver and lover",
-      image: "/Iris-ps.jpgjpg.jpg",
-    },
-    {
-      id: 20,
-      name: "Isabella",
-      personality: "Caregiver and lover",
-      image: "/Isabella-ps.jpgjpg.jpg",
-    },
-    {
-      id: 21,
-      name: "Isla",
-      personality: "Caregiver and lover",
-      image: "/Isla.jpg",
-    },
-    {
-      id: 22,
-      name: "Jasmine",
-      personality: "Caregiver and lover",
-      image: "/Jasmine-ps.jpgjpg.jpg",
-    },
-    {
-      id: 23,
-      name: "June",
-      personality: "Caregiver and lover",
-      image: "/June-ps.jpgjpg.jpg",
-    },
-    {
-      id: 24,
-      name: "Keira",
-      personality: "Caregiver and lover",
-      image: "/Keira.jpg",
-    },
-    {
-      id: 25,
-      name: "Lana",
-      personality: "Caregiver and lover",
-      image: "/Lana-ps.jpg.jpg",
-    },
-    {
-      id: 26,
-      name: "Leena",
-      personality: "Caregiver and lover",
-      image: "/Leena1-ps.jpg.jpg",
-    },
-    {
-      id: 27,
-      name: "Lila",
-      personality: "Caregiver and lover",
-      image: "/Lila-ps.jpgjpg.jpg",
-    },
-    {
-      id: 28,
-      name: "Lindsay",
-      personality: "Caregiver and lover",
-      image: "/Lindsay1-ps.jpg.jpg",
-    },
-    {
-      id: 29,
-      name: "Luna",
-      personality: "Caregiver and lover",
-      image: "/Luna-ps.jpgjpg.jpg",
-    },
-    {
-      id: 30,
-      name: "Lyra",
-      personality: "Caregiver and lover",
-      image: "/Lyra.jpg",
-    },
-    {
-      id: 31,
-      name: "Maya",
-      personality: "Caregiver and lover",
-      image: "/Maya3-ps.jpgjpg.jpg",
-    },
-    {
-      id: 32,
-      name: "Mina",
-      personality: "Caregiver and lover",
-      image: "/Mina1-ps.jpg.jpg",
-    },
-    {
-      id: 33,
-      name: "Mira",
-      personality: "Caregiver and lover",
-      image: "/mira2.jpg",
-    },
-    {
-      id: 34,
-      name: "Naomi",
-      personality: "Caregiver and lover",
-      image: "/Naomi1-ps.jpg.jpg",
-    },
-    {
-      id: 35,
-      name: "Nia",
-      personality: "Caregiver and lover",
-      image: "/Nia1 First Edite.jpg",
-    },
-    {
-      id: 36,
-      name: "Nina",
-      personality: "Caregiver and lover",
-      image: "/Nina2-ps.jpgjpg.jpg",
-    },
-    {
-      id: 37,
-      name: "Noa",
-      personality: "Caregiver and lover",
-      image: "/Noa3-ps.jpgjpg.jpg",
-    },
-    {
-      id: 38,
-      name: "Nova",
-      personality: "Caregiver and lover",
-      image: "/Nova.jpg",
-    },
-    {
-      id: 39,
-      name: "Olivia",
-      personality: "Caregiver and lover",
-      image: "/Olivia2.jpg",
-    },
-    {
-      id: 40,
-      name: "Priya",
-      personality: "Caregiver and lover",
-      image: "/Priya.jpg",
-    },
-    {
-      id: 41,
-      name: "Rachel",
-      personality: "Caregiver and lover",
-      image: "/Rachel-ps.jpgjpg.jpg",
-    },
-    {
-      id: 42,
-      name: "Rose",
-      personality: "Caregiver and lover",
-      image: "/Rose-ps.jpgjpg.jpg",
-    },
-    {
-      id: 43,
-      name: "Ruby",
-      personality: "Caregiver and lover",
-      image: "/Ruby.jpg",
-    },
-    {
-      id: 44,
-      name: "Sade",
-      personality: "Caregiver and lover",
-      image: "/Sade2-ps.jpg.jpg",
-    },
-    {
-      id: 45,
-      name: "Sage",
-      personality: "Caregiver and lover",
-      image: "/Sage.jpg",
-    },
-    {
-      id: 46,
-      name: "Sienna",
-      personality: "Caregiver and lover",
-      image: "/Sienna2.jpg",
-    },
-    {
-      id: 47,
-      name: "Sierra",
-      personality: "Caregiver and lover",
-      image: "/Sierra2Sierrajpg.jpg",
-    },
-    {
-      id: 48,
-      name: "Skye",
-      personality: "Caregiver and lover",
-      image: "/Skye.jpg",
-    },
-    {
-      id: 49,
-      name: "Sofia",
-      personality: "Caregiver and lover",
-      image: "/Sofia.jpg",
-    },
-    {
-      id: 50,
-      name: "Soojin",
-      personality: "Caregiver and lover",
-      image: "/Soojin1-ps.jpg.jpg",
-    },
-    {
-      id: 51,
-      name: "Sophie",
-      personality: "Caregiver and lover",
-      image: "/Sophie2-ps.jpg.jpg",
-    },
-    {
-      id: 52,
-      name: "Tessa",
-      personality: "Caregiver and lover",
-      image: "/Tessa2.jpg",
-    },
-    {
-      id: 53,
-      name: "Valentina",
-      personality: "Caregiver and lover",
-      image: "/Valentina.jpg",
-    },
-    {
-      id: 54,
-      name: "Vanessa",
-      personality: "Caregiver and lover",
-      image: "/Vanessa.jpg",
-    },
-    {
-      id: 55,
-      name: "Yuna",
-      personality: "Caregiver and lover",
-      image: "/Yuna1.jpg",
-    },
-    {
-      id: 57,
-      name: "Zara",
-      personality: "Caregiver and lover",
-      image: "/Zara2jpg.jpg",
-    },
-  ]);
+  // State for companions data
+  const [profiles, set_original_profiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Display profiles in sequential order by ID
+  // Function to fetch companions from API
+  const fetchCompanions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiGet('api/companions');
+
+      if (response.success && response.data) {
+        // Sort profiles by ID to ensure consistent sequential order
+        const sortedProfiles = [...response.data].sort((a, b) => a.id - b.id);
+        set_original_profiles(sortedProfiles);
+      } else {
+        throw new Error('Failed to fetch companions');
+      }
+    } catch (error) {
+      console.error('Error fetching companions:', error);
+      setError(error.message);
+      // Fallback to empty array if API fails
+      set_original_profiles([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch companions on component mount
   useEffect(() => {
-    // Sort profiles by ID to ensure consistent sequential order
-    const sortedProfiles = [...profiles].sort((a, b) => a.id - b.id);
-    set_original_profiles(sortedProfiles);
+    fetchCompanions();
   }, []); // Ensure this runs only once on component mount
 
   // Create user-specific localStorage keys
@@ -547,158 +236,199 @@ export default function Home() {
 
         <div className="py-12">
           <div className="max-w-sm mx-auto relative h-[600px]">
-            <AnimatePresence>
-              <motion.div
-                key={currentProfile.id}
-                initial={
-                  direction
-                    ? {
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading companions...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-red-500 mb-4">
+                    <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 mb-4">Failed to load companions</p>
+                  <button
+                    onClick={fetchCompanions}
+                    className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* No Companions State */}
+            {!loading && !error && profiles.length === 0 && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <p className="text-gray-600">No companions available</p>
+                </div>
+              </div>
+            )}
+
+            {/* Main Content - Only show if we have profiles and no loading/error */}
+            {!loading && !error && profiles.length > 0 && currentProfile && (
+              <AnimatePresence>
+                <motion.div
+                  key={currentProfile.id}
+                  initial={
+                    direction
+                      ? {
                         x:
                           direction === "right"
                             ? -300
                             : direction === "left"
-                            ? 300
-                            : direction === "back"
-                            ? -300
-                            : 0,
+                              ? 300
+                              : direction === "back"
+                                ? -300
+                                : 0,
                       }
-                    : false
-                }
-                animate={{ x: 0, rotate: 0 }}
-                exit={{
-                  x:
-                    direction === "right"
-                      ? 300
-                      : direction === "left"
-                      ? -300
-                      : direction === "back"
-                      ? 300
-                      : 0,
-                  rotate:
-                    direction === "right"
-                      ? 20
-                      : direction === "left"
-                      ? -20
-                      : direction === "back"
-                      ? 20
-                      : 0,
-                }}
-                transition={{ duration: 0.3 }}
-                className="absolute w-full"
-              >
-                {/* Card Container */}
-                <div className="relative rounded-2xl overflow-hidden shadow-xl shadow-red-500">
-                  {/* Image */}
-                  <img
-                    src={currentProfile.image}
-                    alt="Profile"
-                    className="w-full h-[600px] object-cover "
-                  />
+                      : false
+                  }
+                  animate={{ x: 0, rotate: 0 }}
+                  exit={{
+                    x:
+                      direction === "right"
+                        ? 300
+                        : direction === "left"
+                          ? -300
+                          : direction === "back"
+                            ? 300
+                            : 0,
+                    rotate:
+                      direction === "right"
+                        ? 20
+                        : direction === "left"
+                          ? -20
+                          : direction === "back"
+                            ? 20
+                            : 0,
+                  }}
+                  transition={{ duration: 0.3 }}
+                  className="absolute w-full"
+                >
+                  {/* Card Container */}
+                  <div className="relative rounded-2xl overflow-hidden shadow-xl shadow-red-500">
+                    {/* Image */}
+                    <img
+                      src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${currentProfile.image}`}
+                      alt="Profile"
+                      className="w-full h-[600px] object-cover "
+                    />
 
-                  {/* Gradient Overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/60 to-transparent">
-                    {/* Name */}
-                    <div className="absolute bottom-20 left-4">
-                      <h2 className="text-white text-2xl font-semibold">
-                        {currentProfile.name}
-                      </h2>
-                    </div>
+                    {/* Gradient Overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/60 to-transparent">
+                      {/* Name */}
+                      <div className="absolute bottom-20 left-4">
+                        <h2 className="text-white text-2xl font-semibold">
+                          {currentProfile.name}
+                        </h2>
+                      </div>
 
-                    {/* Action Buttons */}
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-4">
-                      {/* Swipe Back Button */}
-                      <button
-                        onClick={swipeBack}
-                        disabled={profileHistory.length === 0}
-                        className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${
-                          profileHistory.length === 0
+                      {/* Action Buttons */}
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-4">
+                        {/* Swipe Back Button */}
+                        <button
+                          onClick={swipeBack}
+                          disabled={profileHistory.length === 0}
+                          className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${profileHistory.length === 0
                             ? "opacity-50 cursor-not-allowed"
                             : "hover:bg-gray-100"
-                        }`}
-                      >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
+                            }`}
                         >
-                          <path
-                            d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
-                            fill="#FE506B"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
+                              fill="#FE506B"
+                            />
+                          </svg>
+                        </button>
 
-                      {/* Swipe Next Button */}
-                      <button
-                        onClick={() => swipe("left")}
-                        className="w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style={{ transform: 'rotate(180deg)' }}
+                        {/* Swipe Next Button */}
+                        <button
+                          onClick={() => swipe("left")}
+                          className="w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
                         >
-                          <path
-                            d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
-                            fill="#FE506B"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            style={{ transform: 'rotate(180deg)' }}
+                          >
+                            <path
+                              d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
+                              fill="#FE506B"
+                            />
+                          </svg>
+                        </button>
 
-                      {/* Like Button */}
-                      <button
-                        onClick={() =>
-                          swipe(
-                            "right",
-                            currentProfile.name,
-                            currentProfile.personality,
-                            currentProfile.image
-                          )
-                        }
-                        className="w-14 h-14 flex items-center justify-center rounded-full bg-brand-pink shadow-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <svg
-                          width="44"
-                          height="44"
-                          viewBox="0 0 44 44"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
+                        {/* Like Button */}
+                        <button
+                          onClick={() =>
+                            swipe(
+                              "right",
+                              currentProfile.name,
+                              currentProfile.personality,
+                              currentProfile.image
+                            )
+                          }
+                          className="w-14 h-14 flex items-center justify-center rounded-full bg-brand-pink shadow-lg hover:bg-gray-100 transition-colors"
                         >
-                          <path
-                            d="M22 39.1417L19.3417 36.7217C9.89999 28.16 3.66666 22.495 3.66666 15.5833C3.66666 9.91833 8.10332 5.5 13.75 5.5C16.94 5.5 20.0017 6.985 22 9.31333C23.9983 6.985 27.06 5.5 30.25 5.5C35.8967 5.5 40.3333 9.91833 40.3333 15.5833C40.3333 22.495 34.1 28.16 24.6583 36.7217L22 39.1417Z"
-                            fill="white"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            width="44"
+                            height="44"
+                            viewBox="0 0 44 44"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M22 39.1417L19.3417 36.7217C9.89999 28.16 3.66666 22.495 3.66666 15.5833C3.66666 9.91833 8.10332 5.5 13.75 5.5C16.94 5.5 20.0017 6.985 22 9.31333C23.9983 6.985 27.06 5.5 30.25 5.5C35.8967 5.5 40.3333 9.91833 40.3333 15.5833C40.3333 22.495 34.1 28.16 24.6583 36.7217L22 39.1417Z"
+                              fill="white"
+                            />
+                          </svg>
+                        </button>
 
-                      {/* Favorite Button */}
-                      <button
-                        onClick={() => swipe("up")}
-                        className="w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <svg
-                          width="32"
-                          height="32"
-                          viewBox="0 0 32 32"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
+                        {/* Favorite Button */}
+                        <button
+                          onClick={() => swipe("up")}
+                          className="w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
                         >
-                          <path
-                            d="M10.9907 9.78666L2.48399 11.02L2.33333 11.0507C2.10525 11.1112 1.89732 11.2312 1.73078 11.3984C1.56425 11.5656 1.44506 11.774 1.38541 12.0023C1.32575 12.2306 1.32776 12.4707 1.39123 12.698C1.4547 12.9252 1.57735 13.1316 1.74666 13.296L7.90933 19.2947L6.45599 27.768L6.43866 27.9147C6.4247 28.1506 6.47368 28.3859 6.58059 28.5967C6.68751 28.8074 6.84851 28.9859 7.04711 29.114C7.24571 29.2421 7.47478 29.315 7.71086 29.3255C7.94694 29.3359 8.18155 29.2834 8.39066 29.1733L15.9987 25.1733L23.5893 29.1733L23.7227 29.2347C23.9427 29.3213 24.1819 29.3479 24.4157 29.3117C24.6494 29.2754 24.8693 29.1776 25.0528 29.0283C25.2363 28.8791 25.3767 28.6837 25.4598 28.4622C25.5428 28.2407 25.5654 28.0011 25.5253 27.768L24.0707 19.2947L30.236 13.2947L30.34 13.1813C30.4886 12.9983 30.586 12.7793 30.6223 12.5464C30.6586 12.3135 30.6326 12.0752 30.5468 11.8556C30.461 11.6361 30.3186 11.4432 30.134 11.2967C29.9494 11.1501 29.7293 11.0551 29.496 11.0213L20.9893 9.78666L17.1867 2.07999C17.0766 1.8567 16.9063 1.66867 16.6949 1.53719C16.4835 1.40571 16.2396 1.33603 15.9907 1.33603C15.7417 1.33603 15.4978 1.40571 15.2864 1.53719C15.075 1.66867 14.9047 1.8567 14.7947 2.07999L10.9907 9.78666Z"
-                            fill="#672653"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            width="32"
+                            height="32"
+                            viewBox="0 0 32 32"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M10.9907 9.78666L2.48399 11.02L2.33333 11.0507C2.10525 11.1112 1.89732 11.2312 1.73078 11.3984C1.56425 11.5656 1.44506 11.774 1.38541 12.0023C1.32575 12.2306 1.32776 12.4707 1.39123 12.698C1.4547 12.9252 1.57735 13.1316 1.74666 13.296L7.90933 19.2947L6.45599 27.768L6.43866 27.9147C6.4247 28.1506 6.47368 28.3859 6.58059 28.5967C6.68751 28.8074 6.84851 28.9859 7.04711 29.114C7.24571 29.2421 7.47478 29.315 7.71086 29.3255C7.94694 29.3359 8.18155 29.2834 8.39066 29.1733L15.9987 25.1733L23.5893 29.1733L23.7227 29.2347C23.9427 29.3213 24.1819 29.3479 24.4157 29.3117C24.6494 29.2754 24.8693 29.1776 25.0528 29.0283C25.2363 28.8791 25.3767 28.6837 25.4598 28.4622C25.5428 28.2407 25.5654 28.0011 25.5253 27.768L24.0707 19.2947L30.236 13.2947L30.34 13.1813C30.4886 12.9983 30.586 12.7793 30.6223 12.5464C30.6586 12.3135 30.6326 12.0752 30.5468 11.8556C30.461 11.6361 30.3186 11.4432 30.134 11.2967C29.9494 11.1501 29.7293 11.0551 29.496 11.0213L20.9893 9.78666L17.1867 2.07999C17.0766 1.8567 16.9063 1.66867 16.6949 1.53719C16.4835 1.40571 16.2396 1.33603 15.9907 1.33603C15.7417 1.33603 15.4978 1.40571 15.2864 1.53719C15.075 1.66867 14.9047 1.8567 14.7947 2.07999L10.9907 9.78666Z"
+                              fill="#672653"
+                            />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
+                </motion.div>
+              </AnimatePresence>
+            )}
           </div>
         </div>
 

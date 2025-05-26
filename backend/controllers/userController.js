@@ -16,8 +16,8 @@ const {
  */
 const checkEmail = async (req, res, next) => {
   try {
-    console.log("Request body:", req.body);
-    console.log("Request headers:", req.headers);
+    // console.log("Request body:", req.body);
+    // console.log("Request headers:", req.headers);
 
     const { email, clerkId, firstName, lastName } = req.body;
 

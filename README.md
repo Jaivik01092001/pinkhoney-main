@@ -180,6 +180,24 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Body**: `{ email, amount }`
   - **Response**: Updated token count
 
+### AI Companions
+
+- `GET /api/companions` - Get all active AI companions
+
+  - **Auth**: Required in production
+  - **Response**: Array of companion objects with id, name, age, bio, personality, interests, image, voiceId
+
+- `GET /api/companions/id/:id` - Get companion by MongoDB ID
+
+  - **Auth**: Required in production
+  - **Params**: `id` (MongoDB ObjectId)
+  - **Response**: Single companion object
+
+- `GET /api/companions/name/:name` - Get companion by name
+  - **Auth**: Required in production
+  - **Params**: `name` (companion name, case-insensitive)
+  - **Response**: Single companion object
+
 ### AI Conversations
 
 - `POST /api/get_ai_response` - Get AI response for chat messages
