@@ -2,6 +2,7 @@
  * AI response controller
  */
 const { getAIResponse } = require("../services/aiService");
+const memoryService = require("../services/memoryService");
 const {
   saveChatMessage,
   getChatHistory,
@@ -46,8 +47,8 @@ const getAIResponseHandler = async (req, res) => {
       }
     }
 
-    // Get AI response
-    const aiResponses = await getAIResponse(message, name, personality);
+    // Get AI response with memory context
+    const aiResponses = await getAIResponse(message, name, personality, user_id);
 
     // Save AI responses to chat history if user_id is provided
     if (user_id) {
@@ -81,6 +82,12 @@ const getAIResponseHandler = async (req, res) => {
       console.log(
         `Successfully saved ${savedResponses} out of ${aiResponses.length} AI responses`
       );
+    }
+
+    // Process conversation memory after saving messages (async, don't wait)
+    if (user_id && name) {
+      memoryService.processMemoryAfterConversation(user_id, name)
+        .catch(error => console.error("Memory processing error:", error));
     }
 
     // Return response

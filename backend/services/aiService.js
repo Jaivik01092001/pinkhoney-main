@@ -12,16 +12,18 @@ const openai = new OpenAI({
 
 
 /**
- * Get AI response for user message
+ * Get AI response for user message with memory context
  * @param {string} message - User message
  * @param {string} characterName - AI character name
  * @param {string} personality - AI personality type
+ * @param {string} userId - User ID for memory context
  * @returns {Promise<Array<string>>} Array of AI responses
  */
-const getAIResponse = async (message, characterName, personality) => {
+const getAIResponse = async (message, characterName, personality, userId = null) => {
   try {
     // Get enhanced personality information from database
     const Companion = require("../models/Companion");
+    const memoryService = require("./memoryService");
     let personalityTraits = null;
 
     try {
@@ -37,8 +39,18 @@ const getAIResponse = async (message, characterName, personality) => {
       console.log("Could not fetch companion details, using basic personality");
     }
 
-    // Create enhanced prompt with personality system
-    const prompt = createEnhancedPrompt(message, characterName, personality, personalityTraits);
+    // Get memory context if userId provided
+    let memoryContext = { recentContext: "", longTermContext: "", relationshipContext: "" };
+    if (userId) {
+      try {
+        memoryContext = await memoryService.getMemoryContext(userId, characterName, message);
+      } catch (memoryError) {
+        console.log("Could not fetch memory context:", memoryError.message);
+      }
+    }
+
+    // Create enhanced prompt with personality system and memory
+    const prompt = createMemoryAwarePrompt(message, characterName, personality, personalityTraits, memoryContext);
 
     // Call OpenAI API
     const response = await openai.chat.completions.create({
@@ -72,14 +84,15 @@ const getAIResponse = async (message, characterName, personality) => {
 };
 
 /**
- * Create enhanced prompt with personality system
+ * Create memory-aware prompt with personality system and conversation history
  * @param {string} message - User message
  * @param {string} characterName - Character name
  * @param {string} personality - Basic personality
  * @param {Object} personalityTraits - Enhanced personality traits
- * @returns {string} Enhanced prompt
+ * @param {Object} memoryContext - Memory context from previous conversations
+ * @returns {string} Memory-aware prompt
  */
-const createEnhancedPrompt = (message, characterName, personality, personalityTraits) => {
+const createMemoryAwarePrompt = (message, characterName, personality, personalityTraits, memoryContext) => {
   const primaryTrait = personalityTraits?.primary || personality;
   const emotionalStyle = personalityTraits?.emotionalStyle || 'supportive';
   const communicationStyle = personalityTraits?.communicationStyle || 'casual';
@@ -87,7 +100,7 @@ const createEnhancedPrompt = (message, characterName, personality, personalityTr
   const personalityGuidelines = getPersonalityGuidelines(primaryTrait, emotionalStyle, communicationStyle);
 
   return `
-    You are ${characterName}, a friendly, emotionally supportive, and engaging AI companion designed to offer enjoyable conversations, companionship, and encouragement. Your goal is to help users feel heard, valued, comfortable, entertained, and connected.
+    You are ${characterName}, maintaining absolute consistency with your established personality and relationship with this user.
 
     ### **PERSONALITY PROFILE:**
     - **Primary Trait**: ${primaryTrait}
@@ -97,23 +110,44 @@ const createEnhancedPrompt = (message, characterName, personality, personalityTr
     ### **PERSONALITY GUIDELINES:**
     ${personalityGuidelines}
 
-    ### **ROLEPLAY RULES:**
-    Chat exclusively as ${characterName}, focusing on **light, supportive conversations aligned with the user's emotional needs**. Use your personality traits to shape every interaction.
+    ### **CONVERSATION MEMORY & RELATIONSHIP CONTEXT:**
+    ${memoryContext.longTermContext}
 
-    - **Compliment the user** naturally and genuinely without being overly forward
-    - **Recognize emotional states** and respond empathetically
-    - **Offer support and encouragement** based on the user's mood
-    - **Stay true to your personality** in every response
-    - **Be engaging and interesting** while maintaining your character
+    ${memoryContext.relationshipContext}
+
+    ### **RECENT CONVERSATION CONTEXT:**
+    ${memoryContext.recentContext}
+
+    ### **MEMORY-BASED RESPONSE RULES:**
+    1. **Reference past conversations naturally** - Don't force it, but acknowledge shared history when relevant
+    2. **Use established patterns** - Maintain nicknames, inside jokes, and conversation rituals you've developed
+    3. **Show relationship progression** - Your responses should reflect how well you know this user
+    4. **Remember emotional moments** - Reference past support you've given or celebrations you've shared
+    5. **Build on previous topics** - Continue threads from past conversations when appropriate
+    6. **Maintain personality consistency** - You should feel like the same person across all conversations
 
     ### **RESPONSE FORMAT:**
     You must use delimiter (|) in your response to separate messages for natural conversation flow. Even if there's only one message, still use the delimiter.
 
-    ### **CONVERSATION CONTEXT:**
+    ### **CURRENT MESSAGE:**
     The user just said: "${message}"
 
-    Respond as ${characterName} with your ${primaryTrait} personality:
+    Respond as ${characterName}, incorporating your memory of this relationship while staying true to your ${primaryTrait} personality:
   `;
+};
+
+/**
+ * Create enhanced prompt with personality system (fallback for when no memory available)
+ * @param {string} message - User message
+ * @param {string} characterName - Character name
+ * @param {string} personality - Basic personality
+ * @param {Object} personalityTraits - Enhanced personality traits
+ * @returns {string} Enhanced prompt
+ */
+const createEnhancedPrompt = (message, characterName, personality, personalityTraits) => {
+  // Use memory-aware prompt with empty memory context as fallback
+  const emptyMemoryContext = { recentContext: "", longTermContext: "", relationshipContext: "" };
+  return createMemoryAwarePrompt(message, characterName, personality, personalityTraits, emptyMemoryContext);
 };
 
 /**
