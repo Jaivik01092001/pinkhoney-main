@@ -62,6 +62,23 @@ function Chat() {
     );
   }
 
+  // Handle clicking on companion detail
+  function handleDetailClick(message, e) {
+    e.stopPropagation(); // Prevent triggering chat click
+
+    const queryParams = new URLSearchParams();
+    if (user_id) queryParams.append("user_id", user_id);
+    if (email) queryParams.append("email", email);
+    queryParams.append("returnUrl", "/all_chats");
+
+    const queryString = queryParams.toString();
+    const detailUrl = queryString
+      ? `/companion/${message.companionId || message._id}?${queryString}`
+      : `/companion/${message.companionId || message._id}`;
+
+    router.push(detailUrl);
+  }
+
   return (
     <>
       <NavigationBar
@@ -172,7 +189,7 @@ function Chat() {
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end">
                   <div className="text-sm text-gray-500">{message.time}</div>
                   {message.unread > 0 && (
                     <div className="bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center ml-auto mt-1">

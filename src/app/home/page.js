@@ -366,6 +366,41 @@ export default function Home() {
                       className="w-full h-[600px] object-cover "
                     />
 
+                    {/* Detail Button */}
+                    <button
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+                        if (user_id) queryParams.append("user_id", user_id);
+                        if (email) queryParams.append("email", email);
+                        queryParams.append("returnUrl", "/home");
+
+                        const queryString = queryParams.toString();
+                        const detailUrl = queryString
+                          ? `/companion/${currentProfile._id}?${queryString}`
+                          : `/companion/${currentProfile._id}`;
+
+                        router.push(detailUrl);
+                      }}
+                      className="absolute top-4 right-4 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="text-white"
+                      >
+                        <path
+                          d="M12 16V12M12 8H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+
                     {/* Gradient Overlay */}
                     <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/60 to-transparent">
                       {/* Name */}
