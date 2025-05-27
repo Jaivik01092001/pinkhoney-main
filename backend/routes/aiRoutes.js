@@ -7,16 +7,14 @@ const { requireAuth } = require("@clerk/express");
 const {
   getAIResponseHandler,
   getChatHistoryHandler,
-  getWelcomeMessageHandler,
-  saveBotMessageHandler,
+  getUserChatSummariesHandler,
+  saveMatchHandler,
 } = require("../controllers/aiController");
 
 // Import middleware
 const { userValidation } = require("../middleware/userValidation");
 const {
   validateAIResponse,
-  validateWelcomeMessage,
-  validateSaveBotMessage,
   validateChatHistory,
 } = require("../middleware/requestValidation");
 const { conditionalAuth } = require("../middleware/securityMiddleware");
@@ -25,9 +23,10 @@ const router = express.Router();
 
 // Use conditional authentication middleware
 console.log(
-  `AI routes using ${process.env.NODE_ENV === "production"
-    ? "authenticated"
-    : "non-authenticated"
+  `AI routes using ${
+    process.env.NODE_ENV === "production"
+      ? "authenticated"
+      : "non-authenticated"
   } mode`
 );
 
@@ -49,22 +48,42 @@ router.get(
   getChatHistoryHandler
 );
 
-// Welcome message endpoint - conditionally authenticated
-router.post(
-  "/get_welcome_message",
+// User chat summaries endpoint - conditionally authenticated
+router.get(
+  "/get_user_chat_summaries",
   conditionalAuth(requireAuth()),
   conditionalAuth(userValidation),
-  validateWelcomeMessage, // Use specific validation for welcome messages
-  getWelcomeMessageHandler
+  (req, res, next) => {
+    // Simple validation for user_id
+    const { user_id } = req.query;
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required field: user_id",
+      });
+    }
+    next();
+  },
+  getUserChatSummariesHandler
 );
 
-// Save bot message endpoint - conditionally authenticated
+// Save match endpoint - conditionally authenticated
 router.post(
-  "/save_bot_message",
+  "/save_match",
   conditionalAuth(requireAuth()),
   conditionalAuth(userValidation),
-  validateSaveBotMessage, // Use specific validation for bot messages
-  saveBotMessageHandler
+  (req, res, next) => {
+    // Simple validation for required fields
+    const { user_id, name, personality, image } = req.body;
+    if (!user_id || !name || !personality || !image) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: user_id, name, personality, image",
+      });
+    }
+    next();
+  },
+  saveMatchHandler
 );
 
 module.exports = router;

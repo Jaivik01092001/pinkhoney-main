@@ -44,6 +44,36 @@ const ChatHistorySchema = new Schema({
     }
   },
   messages: [MessageSchema],
+  // Message preview and status tracking
+  lastMessage: {
+    text: {
+      type: String,
+      default: ''
+    },
+    sender: {
+      type: String,
+      enum: ['user', 'bot'],
+      default: 'bot'
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  unreadCount: {
+    type: Number,
+    default: 0
+  },
+  // Track if this is the first conversation (for first message generation)
+  isFirstConversation: {
+    type: Boolean,
+    default: true
+  },
+  // Track if first message has been generated
+  firstMessageGenerated: {
+    type: Boolean,
+    default: false
+  },
   lastUpdated: {
     type: Date,
     default: Date.now

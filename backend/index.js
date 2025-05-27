@@ -11,6 +11,7 @@ const userRoutes = require("./routes/userRoutes");
 const { router: stripeRoutes } = require("./routes/stripeRoutes");
 const clerkRoutes = require("./routes/clerkRoutes");
 const companionRoutes = require("./routes/companionRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 
 // Connect to MongoDB
 connectDB().then(async () => {
@@ -317,6 +318,7 @@ app.use("/api", (req, res, next) => {
 }, stripeRoutes);
 app.use("/api", clerkRoutes);
 app.use("/api", companionRoutes);
+app.use("/api", messageRoutes);
 
 // Health check endpoint
 app.get("/health", (_, res) => {
