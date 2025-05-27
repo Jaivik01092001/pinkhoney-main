@@ -79,17 +79,17 @@ export default function Home() {
       setLoading(true);
       setError(null);
 
-      const response = await apiGet('api/companions');
+      const response = await apiGet("api/companions");
 
       if (response.success && response.data) {
         // Sort profiles by ID to ensure consistent sequential order
         const sortedProfiles = [...response.data].sort((a, b) => a.id - b.id);
         set_original_profiles(sortedProfiles);
       } else {
-        throw new Error('Failed to fetch companions');
+        throw new Error("Failed to fetch companions");
       }
     } catch (error) {
-      console.error('Error fetching companions:', error);
+      console.error("Error fetching companions:", error);
       setError(error.message);
       // Fallback to empty array if API fails
       set_original_profiles([]);
@@ -104,14 +104,20 @@ export default function Home() {
   }, []); // Ensure this runs only once on component mount
 
   // Create user-specific localStorage keys
-  const userProfileIndexKey = `user_${user_id || 'guest'}_currentProfileIndex`;
-  const userProfileHistoryKey = `user_${user_id || 'guest'}_profileHistory`;
+  const userProfileIndexKey = `user_${user_id || "guest"}_currentProfileIndex`;
+  const userProfileHistoryKey = `user_${user_id || "guest"}_profileHistory`;
 
   // Use localStorage to persist the current profile index and history
-  const [currentIndex, setCurrentIndex] = useLocalStorage(userProfileIndexKey, 0);
+  const [currentIndex, setCurrentIndex] = useLocalStorage(
+    userProfileIndexKey,
+    0
+  );
   const [direction, setDirection] = useState(null);
   // Add state to track profile history for the "swipe back" feature with persistence
-  const [profileHistory, setProfileHistory] = useLocalStorage(userProfileHistoryKey, []);
+  const [profileHistory, setProfileHistory] = useLocalStorage(
+    userProfileHistoryKey,
+    []
+  );
 
   // Ensure the currentIndex is valid (in case the number of profiles has changed)
   useEffect(() => {
@@ -132,13 +138,28 @@ export default function Home() {
 
   const currentProfile = profiles[currentIndex];
 
-  const swipe = (direction, name, personality, image) => {
+  const swipe = async (direction, name, personality, image) => {
     setDirection(direction);
 
     // Save current index to history before changing it
-    setProfileHistory(prev => [...prev, currentIndex]);
+    setProfileHistory((prev) => [...prev, currentIndex]);
 
     if (direction === "right") {
+      // Save the match to the database
+      try {
+        await apiPost("api/save_match", {
+          user_id: user_id,
+          name: name,
+          personality: personality,
+          image: image,
+          matchType: "like",
+        });
+        console.log(`Match saved for ${name}`);
+      } catch (error) {
+        console.error("Error saving match:", error);
+        // Continue with navigation even if match saving fails
+      }
+
       // For right swipe (heart icon), only navigate to match page without advancing to next profile
       setTimeout(() => {
         setDirection(null);
@@ -167,7 +188,7 @@ export default function Home() {
       setDirection("back");
 
       // Remove the last index from history
-      setProfileHistory(prev => prev.slice(0, -1));
+      setProfileHistory((prev) => prev.slice(0, -1));
 
       setTimeout(() => {
         setDirection(null);
@@ -178,6 +199,10 @@ export default function Home() {
 
   function go_to_pricing() {
     router.push(`/pricing?user_id=${user_id}&email=${email}`);
+  }
+
+  function go_to_messages() {
+    router.push(`/all_chats?user_id=${user_id}&email=${email}`);
   }
 
   return (
@@ -251,11 +276,23 @@ export default function Home() {
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <div className="text-red-500 mb-4">
-                    <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    <svg
+                      className="w-12 h-12 mx-auto"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 16.5c-.77.833.192 2.5 1.732 2.5z"
+                      />
                     </svg>
                   </div>
-                  <p className="text-gray-600 mb-4">Failed to load companions</p>
+                  <p className="text-gray-600 mb-4">
+                    Failed to load companions
+                  </p>
                   <button
                     onClick={fetchCompanions}
                     className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors"
@@ -283,15 +320,15 @@ export default function Home() {
                   initial={
                     direction
                       ? {
-                        x:
-                          direction === "right"
-                            ? -300
-                            : direction === "left"
+                          x:
+                            direction === "right"
+                              ? -300
+                              : direction === "left"
                               ? 300
                               : direction === "back"
-                                ? -300
-                                : 0,
-                      }
+                              ? -300
+                              : 0,
+                        }
                       : false
                   }
                   animate={{ x: 0, rotate: 0 }}
@@ -300,18 +337,18 @@ export default function Home() {
                       direction === "right"
                         ? 300
                         : direction === "left"
-                          ? -300
-                          : direction === "back"
-                            ? 300
-                            : 0,
+                        ? -300
+                        : direction === "back"
+                        ? 300
+                        : 0,
                     rotate:
                       direction === "right"
                         ? 20
                         : direction === "left"
-                          ? -20
-                          : direction === "back"
-                            ? 20
-                            : 0,
+                        ? -20
+                        : direction === "back"
+                        ? 20
+                        : 0,
                   }}
                   transition={{ duration: 0.3 }}
                   className="absolute w-full"
@@ -320,7 +357,10 @@ export default function Home() {
                   <div className="relative rounded-2xl overflow-hidden shadow-xl shadow-red-500">
                     {/* Image */}
                     <img
-                      src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${currentProfile.image}`}
+                      src={`${
+                        process.env.NEXT_PUBLIC_BACKEND_URL ||
+                        "http://localhost:8080"
+                      }${currentProfile.image}`}
                       alt="Profile"
                       className="w-full h-[600px] object-cover "
                     />
@@ -340,10 +380,11 @@ export default function Home() {
                         <button
                           onClick={swipeBack}
                           disabled={profileHistory.length === 0}
-                          className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${profileHistory.length === 0
-                            ? "opacity-50 cursor-not-allowed"
-                            : "hover:bg-gray-100"
-                            }`}
+                          className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${
+                            profileHistory.length === 0
+                              ? "opacity-50 cursor-not-allowed"
+                              : "hover:bg-gray-100"
+                          }`}
                         >
                           <svg
                             width="24"
@@ -370,7 +411,7 @@ export default function Home() {
                             viewBox="0 0 24 24"
                             fill="none"
                             xmlns="http://www.w3.org/2000/svg"
-                            style={{ transform: 'rotate(180deg)' }}
+                            style={{ transform: "rotate(180deg)" }}
                           >
                             <path
                               d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
@@ -466,8 +507,11 @@ export default function Home() {
             {/* <X className="w-8 h-8 text-gray-600" /> */}
           </button>
 
-          {/* Like Button */}
-          <button className="w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors">
+          {/* Messages/Chat Button */}
+          <button
+            onClick={go_to_messages}
+            className="w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+          >
             <svg
               width="24"
               height="24"
@@ -505,8 +549,6 @@ export default function Home() {
                 strokeLinejoin="round"
               />
             </svg>
-
-            {/* <Heart className="w-8 h-8 text-pink-500" /> */}
           </button>
 
           {/* Favorite Button */}

@@ -2,7 +2,12 @@
  * AI response controller
  */
 const { getAIResponse } = require("../services/aiService");
-const { saveChatMessage, getChatHistory } = require("../services/mongoService");
+const {
+  saveChatMessage,
+  getChatHistory,
+  getUserChatSummaries,
+  saveMatch,
+} = require("../services/mongoService");
 
 /**
  * Get AI response for user message
@@ -141,11 +146,85 @@ const getChatHistoryHandler = async (req, res) => {
   }
 };
 
+/**
+ * Get all chat summaries for a user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getUserChatSummariesHandler = async (req, res) => {
+  try {
+    const { user_id } = req.query;
 
+    // Validate required fields
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required field: user_id",
+      });
+    }
 
+    // Get chat summaries
+    const chatSummaries = await getUserChatSummaries(user_id);
 
+    // Return response
+    res.status(200).json({
+      success: true,
+      chatSummaries: chatSummaries,
+    });
+  } catch (error) {
+    console.error("Error in getUserChatSummariesHandler:", error);
+
+    // Send a more user-friendly error response
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve chat summaries. Please try again.",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Save a match between user and companion
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const saveMatchHandler = async (req, res) => {
+  try {
+    const { user_id, name, personality, image, matchType } = req.body;
+
+    // Validate required fields
+    if (!user_id || !name || !personality || !image) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: user_id, name, personality, image",
+      });
+    }
+
+    // Save the match
+    const match = await saveMatch(user_id, name, personality, image, matchType);
+
+    // Return response
+    res.status(200).json({
+      success: true,
+      match: match,
+    });
+  } catch (error) {
+    console.error("Error in saveMatchHandler:", error);
+
+    // Send a more user-friendly error response
+    res.status(500).json({
+      success: false,
+      error: "Failed to save match. Please try again.",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
 
 module.exports = {
   getAIResponseHandler,
   getChatHistoryHandler,
+  getUserChatSummariesHandler,
+  saveMatchHandler,
 };
