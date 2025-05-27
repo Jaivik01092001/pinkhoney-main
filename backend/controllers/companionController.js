@@ -2,7 +2,7 @@
  * Companion Controller
  * Handles companion-related API endpoints
  */
-const Companion = require('../models/Companion');
+const Companion = require("../models/Companion");
 
 /**
  * Get all active companions
@@ -13,7 +13,9 @@ const getAllCompanions = async (req, res) => {
   try {
     // Fetch all active companions from database
     const companions = await Companion.find({ isActive: true })
-      .select('name age bio personality interests imageUrl voiceId')
+      .select(
+        "name age bio personality personalityTraits interests imageUrl voiceId"
+      )
       .sort({ createdAt: 1 }); // Sort by creation date for consistent order
 
     // Transform data to match frontend expectations
@@ -23,25 +25,25 @@ const getAllCompanions = async (req, res) => {
       age: companion.age,
       bio: companion.bio,
       personality: companion.personality,
+      personalityTraits: companion.personalityTraits,
       interests: companion.interests,
       image: companion.imageUrl, // Map imageUrl to image for frontend compatibility
       imageUrl: companion.imageUrl,
       voiceId: companion.voiceId,
-      _id: companion._id // Keep MongoDB ID for reference
+      _id: companion._id, // Keep MongoDB ID for reference
     }));
 
     res.status(200).json({
       success: true,
       data: transformedCompanions,
-      count: transformedCompanions.length
+      count: transformedCompanions.length,
     });
-
   } catch (error) {
-    console.error('Error fetching companions:', error);
+    console.error("Error fetching companions:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch companions',
-      message: error.message
+      error: "Failed to fetch companions",
+      message: error.message,
     });
   }
 };
@@ -61,14 +63,14 @@ const getCompanionById = async (req, res) => {
     if (!companion) {
       return res.status(404).json({
         success: false,
-        error: 'Companion not found'
+        error: "Companion not found",
       });
     }
 
     if (!companion.isActive) {
       return res.status(404).json({
         success: false,
-        error: 'Companion is not active'
+        error: "Companion is not active",
       });
     }
 
@@ -78,24 +80,24 @@ const getCompanionById = async (req, res) => {
       age: companion.age,
       bio: companion.bio,
       personality: companion.personality,
+      personalityTraits: companion.personalityTraits,
       interests: companion.interests,
       image: companion.imageUrl,
       imageUrl: companion.imageUrl,
       voiceId: companion.voiceId,
-      _id: companion._id
+      _id: companion._id,
     };
 
     res.status(200).json({
       success: true,
-      data: transformedCompanion
+      data: transformedCompanion,
     });
-
   } catch (error) {
-    console.error('Error fetching companion by ID:', error);
+    console.error("Error fetching companion by ID:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch companion',
-      message: error.message
+      error: "Failed to fetch companion",
+      message: error.message,
     });
   }
 };
@@ -110,15 +112,15 @@ const getCompanionByName = async (req, res) => {
     const { name } = req.params;
 
     // Find companion by name (case-insensitive)
-    const companion = await Companion.findOne({ 
-      name: { $regex: new RegExp(`^${name}$`, 'i') },
-      isActive: true 
+    const companion = await Companion.findOne({
+      name: { $regex: new RegExp(`^${name}$`, "i") },
+      isActive: true,
     });
 
     if (!companion) {
       return res.status(404).json({
         success: false,
-        error: 'Companion not found'
+        error: "Companion not found",
       });
     }
 
@@ -128,24 +130,24 @@ const getCompanionByName = async (req, res) => {
       age: companion.age,
       bio: companion.bio,
       personality: companion.personality,
+      personalityTraits: companion.personalityTraits,
       interests: companion.interests,
       image: companion.imageUrl,
       imageUrl: companion.imageUrl,
       voiceId: companion.voiceId,
-      _id: companion._id
+      _id: companion._id,
     };
 
     res.status(200).json({
       success: true,
-      data: transformedCompanion
+      data: transformedCompanion,
     });
-
   } catch (error) {
-    console.error('Error fetching companion by name:', error);
+    console.error("Error fetching companion by name:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch companion',
-      message: error.message
+      error: "Failed to fetch companion",
+      message: error.message,
     });
   }
 };
@@ -153,5 +155,5 @@ const getCompanionByName = async (req, res) => {
 module.exports = {
   getAllCompanions,
   getCompanionById,
-  getCompanionByName
+  getCompanionByName,
 };
