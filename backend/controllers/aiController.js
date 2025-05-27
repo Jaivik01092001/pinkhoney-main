@@ -2,6 +2,7 @@
  * AI response controller
  */
 const { getAIResponse, getWelcomeMessage } = require("../services/aiService");
+const { AccessToken, TrackSource  } = require("livekit-server-sdk");
 const { saveChatMessage, getChatHistory } = require("../services/mongoService");
 
 /**
@@ -257,6 +258,45 @@ const saveBotMessageHandler = async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to save bot message. Please try again.",
+    })
+  }
+}
+const postVoiceToken = async (req, res) => {
+  try {
+    console.log(req);
+    const { userId, room } = req.body;
+    if (!userId || !room) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: user_id or companion_name",
+      });
+    }
+
+    //May need to move this to service level: Viral
+    const at = new AccessToken(
+      process.env.LIVEKIT_API_KEY,
+      process.env.LIVEKIT_API_SECRET,
+      { identity: userId, name: room, ttl: "1h" }
+    );
+    const grant = {
+      room: "roomName",
+      roomJoin: true,
+      canPublishData: true,
+      canSubscribe: true,
+      canPublishSources: [TrackSource.MICROPHONE],
+    };
+    at.addGrant(grant);
+    const token = await at.toJwt();
+    res.status(200).json({
+      success: true,
+      messages: token,
+    });
+  } catch (error) {
+    console.error("Error in postVoiceChat:", error);
+
+    res.status(500).json({
+      success: false,
+      error: "Failed to create voice chat instance. Please try again.",
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
@@ -268,4 +308,5 @@ module.exports = {
   getChatHistoryHandler,
   getWelcomeMessageHandler,
   saveBotMessageHandler,
+  postVoiceToken,
 };

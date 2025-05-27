@@ -9,6 +9,7 @@ const {
   getChatHistoryHandler,
   getWelcomeMessageHandler,
   saveBotMessageHandler,
+  postVoiceToken
 } = require("../controllers/aiController");
 
 // Import middleware
@@ -66,5 +67,7 @@ router.post(
   validateSaveBotMessage, // Use specific validation for bot messages
   saveBotMessageHandler
 );
+//Removed authentication for testing: Viral
+router.post("/voiceToken", postVoiceToken)
 
 module.exports = router;
