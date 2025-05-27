@@ -182,6 +182,18 @@ function Chat() {
           "and companion:",
           name
         );
+
+        // Mark messages as read when opening chat
+        try {
+          await apiPost("api/mark_as_read", {
+            user_id: userId,
+            companion_name: name
+          });
+          console.log("Messages marked as read");
+        } catch (readError) {
+          console.error("Error marking messages as read:", readError);
+        }
+
         const data = await apiGet(`api/get_chat_history?user_id=${userId}&companion_name=${name}`);
         if (data.success && data.messages && data.messages.length > 0) {
           console.log(

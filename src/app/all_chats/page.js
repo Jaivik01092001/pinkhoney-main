@@ -1,23 +1,50 @@
 "use client"
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import NavigationBar from "../components/NavigationBar";
+import { apiGet, apiPost } from "@/services/api";
 
 function Chat() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const user_id = searchParams.get("user_id");
     const email = searchParams.get("email");
-    const messages = [
-        { name: "Susan", status: "Typing..", time: "27 min", unread: 2, img: "https://placehold.co/50x50", online: true },
-        { name: "Mabel", status: "Alright! Thanks.", time: "33 min", unread: 2, img: "https://placehold.co/50x50", online: false },
-        { name: "Isobel", status: "You: Hello how are you?", time: "33 min", unread: 0, img: "https://placehold.co/50x50", online: false },
-        { name: "Cynthia", status: "You: Hello how are you?", time: "33 min", unread: 0, img: "https://placehold.co/50x50", online: false },
-        { name: "Pearl", status: "You: Hello how are you?", time: "33 min", unread: 0, img: "https://placehold.co/50x50", online: false },
-        { name: "Bianca", status: "Let me know when you are ready", time: "33 min", unread: 0, img: "https://placehold.co/50x50", online: true },
-    ];
+
+    const [messages, setMessages] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Fetch user's chat threads when component mounts
+    useEffect(() => {
+        const fetchChatThreads = async () => {
+            if (!user_id) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                console.log("Fetching chat threads for user:", user_id);
+                const data = await apiGet(`api/get_user_inbox?user_id=${user_id}`);
+
+                if (data.success) {
+                    console.log("Chat threads loaded:", data.threads.length);
+                    setMessages(data.threads);
+                } else {
+                    console.error("Failed to load chat threads:", data.error);
+                    setError(data.error);
+                }
+            } catch (error) {
+                console.error("Error fetching chat threads:", error);
+                setError("Failed to load messages");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchChatThreads();
+    }, [user_id]);
 
     function go_to_pricing() {
         router.push(`/pricing?user_id=${user_id}&email=${email}`)
@@ -25,6 +52,11 @@ function Chat() {
 
     function go_to_home() {
         router.push(`/home?user_id=${user_id}&email=${email}`)
+    }
+
+    // Handle clicking on a chat thread
+    function handleChatClick(message) {
+        router.push(`/chat?name=${message.name}&personality=${message.personality}&image=${message.image}&user_id=${user_id}&email=${email}`);
     }
 
     return (
@@ -56,31 +88,67 @@ function Chat() {
 
             </div>
             <div className='m-4'>
-                <h1 class="text-2xl font-bold mb-4 text-white">Messages</h1>
-                {/* <div class="relative mb-4">
-                    <input type="text" placeholder="Search" class="w-full p-2 pl-10 border rounded-full focus:outline-none" />
-                    <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
-                </div> */}
-                <div>
-                    {messages.map((message, index) => (
-                        <div key={index} class="flex items-center justify-between py-2 border-b">
-                            <div class="flex items-center">
-                                <div class="relative">
-                                    <img src={message.img} alt={`Profile picture of ${message.name}`} class="w-10 h-10 rounded-full" />
-                                    {message.online && <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border border-white"></span>}
+                <h1 className="text-2xl font-bold mb-4 text-white">Messages</h1>
+
+                {loading && (
+                    <div className="text-center text-gray-400 py-8">
+                        Loading your messages...
+                    </div>
+                )}
+
+                {error && (
+                    <div className="text-center text-red-400 py-8">
+                        {error}
+                    </div>
+                )}
+
+                {!loading && !error && messages.length === 0 && (
+                    <div className="text-center text-gray-400 py-8">
+                        <p>No messages yet!</p>
+                        <p className="text-sm mt-2">Start swiping to match with AI companions.</p>
+                        <button
+                            onClick={go_to_home}
+                            className="mt-4 bg-pink-500 text-white px-6 py-2 rounded-full hover:bg-pink-600 transition-colors"
+                        >
+                            Start Swiping
+                        </button>
+                    </div>
+                )}
+
+                {!loading && !error && messages.length > 0 && (
+                    <div>
+                        {messages.map((message, index) => (
+                            <div
+                                key={index}
+                                className="flex items-center justify-between py-3 border-b border-gray-700 cursor-pointer hover:bg-gray-800 transition-colors rounded-lg px-2"
+                                onClick={() => handleChatClick(message)}
+                            >
+                                <div className="flex items-center">
+                                    <div className="relative">
+                                        <img
+                                            src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${message.img}`}
+                                            alt={`Profile picture of ${message.name}`}
+                                            className="w-12 h-12 rounded-full object-cover"
+                                        />
+                                        {message.online && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black"></span>}
+                                    </div>
+                                    <div className="ml-3 flex-1">
+                                        <div className="font-bold text-white">{message.name}</div>
+                                        <div className="text-sm text-gray-400 truncate max-w-xs">{message.status}</div>
+                                    </div>
                                 </div>
-                                <div class="ml-3">
-                                    <div class="font-bold">{message.name}</div>
-                                    <div class="text-sm text-gray-500">{message.status}</div>
+                                <div className="text-right">
+                                    <div className="text-sm text-gray-500">{message.time}</div>
+                                    {message.unread > 0 && (
+                                        <div className="bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center ml-auto mt-1">
+                                            {message.unread}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                            <div class="text-right">
-                                <div class="text-sm text-gray-500">{message.time}</div>
-                                {message.unread > 0 && <div class="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center ml-auto">{message.unread}</div>}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </>
     )

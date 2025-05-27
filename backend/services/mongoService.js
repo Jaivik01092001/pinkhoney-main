@@ -94,9 +94,10 @@ const getUserByClerkId = async (clerkId) => {
  * @param {string} personality - Companion personality
  * @param {string} image - Companion image
  * @param {Object} message - Message object
+ * @param {Object} options - Additional options (isFirstMessage, markAsFirstMessageGenerated)
  * @returns {Promise<Object>} Updated chat history
  */
-const saveChatMessage = async (userId, name, personality, image, message) => {
+const saveChatMessage = async (userId, name, personality, image, message, options = {}) => {
   try {
     // Find existing chat history or create new one
     let chatHistory = await ChatHistory.findOne({
@@ -113,6 +114,14 @@ const saveChatMessage = async (userId, name, personality, image, message) => {
           image,
         },
         messages: [],
+        lastMessage: {
+          text: '',
+          sender: 'bot',
+          timestamp: new Date()
+        },
+        unreadCount: 0,
+        isFirstConversation: true,
+        firstMessageGenerated: false
       });
     }
 
@@ -128,12 +137,34 @@ const saveChatMessage = async (userId, name, personality, image, message) => {
     chatHistory.messages.push(message);
     chatHistory.lastUpdated = new Date();
 
+    // Update last message preview
+    chatHistory.lastMessage = {
+      text: message.text,
+      sender: message.sender,
+      timestamp: message.timestamp || new Date()
+    };
+
+    // Handle unread count
+    if (message.sender === 'bot') {
+      chatHistory.unreadCount += 1;
+    } else if (message.sender === 'user') {
+      // User sent a message, reset unread count
+      chatHistory.unreadCount = 0;
+      // Mark as no longer first conversation
+      chatHistory.isFirstConversation = false;
+    }
+
+    // Handle first message generation flag
+    if (options.markAsFirstMessageGenerated) {
+      chatHistory.firstMessageGenerated = true;
+    }
+
     await chatHistory.save();
     console.log(
       `Chat message saved for user ${userId} with companion ${name}. Message: ${message.text.substring(
         0,
         30
-      )}...`
+      )}... (Unread: ${chatHistory.unreadCount})`
     );
     return chatHistory;
   } catch (error) {
@@ -346,6 +377,190 @@ const updatePayment = async (stripeSessionId, updateData) => {
   }
 };
 
+/**
+ * Get all chat threads for a user (for inbox/messages page)
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of chat threads with previews
+ */
+const getUserChatThreads = async (userId) => {
+  try {
+    const chatThreads = await ChatHistory.find({
+      user_id: userId
+    })
+    .select('companion lastMessage unreadCount lastUpdated isFirstConversation firstMessageGenerated')
+    .sort({ lastUpdated: -1 }); // Sort by most recent activity
+
+    // Transform data for frontend
+    const transformedThreads = chatThreads.map(thread => ({
+      name: thread.companion.name,
+      image: thread.companion.image,
+      personality: thread.companion.personality,
+      lastMessage: {
+        text: thread.lastMessage.text || '',
+        sender: thread.lastMessage.sender || 'bot',
+        timestamp: thread.lastMessage.timestamp || thread.lastUpdated
+      },
+      unreadCount: thread.unreadCount || 0,
+      lastUpdated: thread.lastUpdated,
+      isOnline: true, // AI companions are always "online"
+      isFirstConversation: thread.isFirstConversation,
+      firstMessageGenerated: thread.firstMessageGenerated
+    }));
+
+    console.log(`Found ${transformedThreads.length} chat threads for user ${userId}`);
+    return transformedThreads;
+  } catch (error) {
+    console.error("Error getting user chat threads:", error);
+    throw error;
+  }
+};
+
+/**
+ * Mark messages as read when user opens a chat
+ * @param {string} userId - User ID
+ * @param {string} companionName - Companion name
+ * @returns {Promise<Object>} Updated chat history
+ */
+const markMessagesAsRead = async (userId, companionName) => {
+  try {
+    const chatHistory = await ChatHistory.findOneAndUpdate(
+      {
+        user_id: userId,
+        "companion.name": companionName,
+      },
+      {
+        $set: { unreadCount: 0 }
+      },
+      { new: true }
+    );
+
+    if (chatHistory) {
+      console.log(`Marked messages as read for user ${userId} and companion ${companionName}`);
+    }
+
+    return chatHistory;
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+    throw error;
+  }
+};
+
+/**
+ * Check if first message needs to be generated for a chat
+ * @param {string} userId - User ID
+ * @param {string} companionName - Companion name
+ * @returns {Promise<boolean>} True if first message needs to be generated
+ */
+const needsFirstMessage = async (userId, companionName) => {
+  try {
+    const chatHistory = await ChatHistory.findOne({
+      user_id: userId,
+      "companion.name": companionName,
+    });
+
+    // Need first message if:
+    // 1. No chat history exists, OR
+    // 2. Chat exists but first message hasn't been generated yet
+    const needs = !chatHistory || (!chatHistory.firstMessageGenerated && chatHistory.messages.length === 0);
+
+    console.log(`First message needed for ${userId}/${companionName}: ${needs}`);
+    return needs;
+  } catch (error) {
+    console.error("Error checking if first message is needed:", error);
+    return true; // Default to true if there's an error
+  }
+};
+
+/**
+ * Save a match between user and companion
+ * @param {string} userId - User ID
+ * @param {string} name - Companion name
+ * @param {string} personality - Companion personality
+ * @param {string} image - Companion image URL
+ * @param {string} matchType - Type of match (optional)
+ * @returns {Promise<Object>} Match result
+ */
+const saveMatch = async (userId, name, personality, image, matchType = 'like') => {
+  try {
+    // For now, we'll create or update a chat history record to represent the match
+    // This ensures that when the user matches, a chat thread is ready
+    let chatHistory = await ChatHistory.findOne({
+      user_id: userId,
+      "companion.name": name,
+    });
+
+    if (!chatHistory) {
+      // Create new chat history for the match
+      chatHistory = new ChatHistory({
+        user_id: userId,
+        companion: {
+          name,
+          personality,
+          image,
+        },
+        messages: [],
+        lastMessage: {
+          text: '',
+          sender: 'bot',
+          timestamp: new Date()
+        },
+        unreadCount: 0,
+        isFirstConversation: true,
+        firstMessageGenerated: false
+      });
+
+      await chatHistory.save();
+      console.log(`Match saved: User ${userId} matched with ${name}`);
+    } else {
+      console.log(`Match already exists: User ${userId} and ${name}`);
+    }
+
+    return {
+      userId,
+      companionName: name,
+      personality,
+      image,
+      matchType,
+      matchedAt: new Date(),
+      chatId: chatHistory._id
+    };
+
+  } catch (error) {
+    console.error("Error saving match:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get chat summaries for a user (legacy function for compatibility)
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of chat summaries
+ */
+const getUserChatSummaries = async (userId) => {
+  try {
+    // This is essentially the same as getUserChatThreads but with different formatting
+    // for backward compatibility
+    const chatThreads = await getUserChatThreads(userId);
+
+    // Transform to match expected format
+    const summaries = chatThreads.map(thread => ({
+      companionName: thread.name,
+      personality: thread.personality,
+      image: thread.image,
+      lastMessage: thread.lastMessage.text,
+      lastMessageTime: thread.lastMessage.timestamp,
+      unreadCount: thread.unreadCount,
+      totalMessages: 0 // We don't track this currently, but could be added
+    }));
+
+    console.log(`Found ${summaries.length} chat summaries for user ${userId}`);
+    return summaries;
+  } catch (error) {
+    console.error("Error getting user chat summaries:", error);
+    throw error;
+  }
+};
+
 module.exports = {
   getUserByEmail,
   createUser,
@@ -354,6 +569,11 @@ module.exports = {
   getUserByClerkId,
   saveChatMessage,
   getChatHistory,
+  getUserChatThreads,
+  markMessagesAsRead,
+  needsFirstMessage,
+  saveMatch,
+  getUserChatSummaries,
   createPayment,
   updatePayment,
   findPaymentBySessionIdPattern,
