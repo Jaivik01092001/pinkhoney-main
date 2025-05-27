@@ -10,9 +10,19 @@ const aiRoutes = require("./routes/aiRoutes");
 const userRoutes = require("./routes/userRoutes");
 const { router: stripeRoutes } = require("./routes/stripeRoutes");
 const clerkRoutes = require("./routes/clerkRoutes");
+const companionRoutes = require("./routes/companionRoutes");
 
 // Connect to MongoDB
-connectDB();
+connectDB().then(async () => {
+  // Auto-seed companions data if needed
+  try {
+    const { seedCompanionsBulk } = require('./seeders/companionSeederBulk');
+    await seedCompanionsBulk(true); // Pass true to indicate server startup
+  } catch (error) {
+    console.error('Error during auto-seeding:', error.message);
+    // Don't crash the server, just log the error
+  }
+});
 
 // Initialize Express app
 const app = express();
@@ -263,6 +273,18 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 app.use(express.json({ limit: "1mb" })); // Parse JSON bodies with size limit
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // Parse URL-encoded bodies with size limit
 
+// Serve static files from UploadFolder
+// const path = require('path');
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+}));
+
+
 // Apply Clerk authentication middleware (except for webhook route which is handled separately)
 app.use((req, res, next) => {
   // Skip authentication for webhook endpoint
@@ -294,6 +316,7 @@ app.use("/api", (req, res, next) => {
   next();
 }, stripeRoutes);
 app.use("/api", clerkRoutes);
+app.use("/api", companionRoutes);
 
 // Health check endpoint
 app.get("/health", (_, res) => {

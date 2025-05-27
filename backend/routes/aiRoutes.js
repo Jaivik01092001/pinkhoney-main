@@ -7,12 +7,16 @@ const { requireAuth } = require("@clerk/express");
 const {
   getAIResponseHandler,
   getChatHistoryHandler,
+  getWelcomeMessageHandler,
+  saveBotMessageHandler,
 } = require("../controllers/aiController");
 
 // Import middleware
 const { userValidation } = require("../middleware/userValidation");
 const {
   validateAIResponse,
+  validateWelcomeMessage,
+  validateSaveBotMessage,
   validateChatHistory,
 } = require("../middleware/requestValidation");
 const { conditionalAuth } = require("../middleware/securityMiddleware");
@@ -21,10 +25,9 @@ const router = express.Router();
 
 // Use conditional authentication middleware
 console.log(
-  `AI routes using ${
-    process.env.NODE_ENV === "production"
-      ? "authenticated"
-      : "non-authenticated"
+  `AI routes using ${process.env.NODE_ENV === "production"
+    ? "authenticated"
+    : "non-authenticated"
   } mode`
 );
 
@@ -44,6 +47,24 @@ router.get(
   conditionalAuth(userValidation),
   validateChatHistory,
   getChatHistoryHandler
+);
+
+// Welcome message endpoint - conditionally authenticated
+router.post(
+  "/get_welcome_message",
+  conditionalAuth(requireAuth()),
+  conditionalAuth(userValidation),
+  validateWelcomeMessage, // Use specific validation for welcome messages
+  getWelcomeMessageHandler
+);
+
+// Save bot message endpoint - conditionally authenticated
+router.post(
+  "/save_bot_message",
+  conditionalAuth(requireAuth()),
+  conditionalAuth(userValidation),
+  validateSaveBotMessage, // Use specific validation for bot messages
+  saveBotMessageHandler
 );
 
 module.exports = router;

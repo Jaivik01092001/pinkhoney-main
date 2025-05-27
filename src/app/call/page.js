@@ -14,7 +14,7 @@ function Call() {
   const image = searchParams.get("image");
   const [userId, setUserId] = useState(searchParams.get("user_id") || "");
   const email = searchParams.get("email");
-  
+
   const [isMuted, setIsMuted] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [isCallActive, setIsCallActive] = useState(true);
@@ -51,38 +51,38 @@ function Call() {
 
   return (
     <div className="min-h-screen bg-black">
-      <NavigationBar 
+      <NavigationBar
         type="back"
         backUrl="/chat"
         title="Voice Call"
         params={{ name, personality, image, user_id: userId, email }}
         className="mb-4"
       />
-      
+
       <div className="flex flex-col items-center justify-center h-[80vh]">
         {/* Profile Image */}
         <div className="relative mb-8">
-          <img 
-            src={image} 
-            alt={name} 
+          <img
+            src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${image}`}
+            alt={name}
             className="w-40 h-40 rounded-full object-cover border-4 border-brand-pink"
           />
           <div className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 rounded-full border-2 border-black"></div>
         </div>
-        
+
         {/* Name and Status */}
         <h2 className="text-white text-2xl font-bold mb-2">{name}</h2>
         <p className="text-green-500 mb-6">
           {isCallActive ? "Call in progress" : "Call ended"}
         </p>
-        
+
         {/* Call Duration */}
         <p className="text-gray-400 mb-12">{formatDuration(callDuration)}</p>
-        
+
         {/* Call Controls */}
         <div className="flex items-center justify-center space-x-8">
-          <button 
-            onClick={toggleMute} 
+          <button
+            onClick={toggleMute}
             className={`w-14 h-14 rounded-full flex items-center justify-center ${isMuted ? 'bg-gray-700' : 'bg-gray-600'}`}
           >
             {isMuted ? (
@@ -91,9 +91,9 @@ function Call() {
               <Mic className="w-6 h-6 text-white" />
             )}
           </button>
-          
-          <button 
-            onClick={endCall} 
+
+          <button
+            onClick={endCall}
             className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center"
           >
             <PhoneOff className="w-8 h-8 text-white" />
