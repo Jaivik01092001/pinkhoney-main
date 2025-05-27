@@ -19,7 +19,6 @@ function Chat() {
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false); // Enhanced typing indicator
   const [typingDots, setTypingDots] = useState(""); // Animated typing dots
-  const [userName, setUserName] = useState(""); // Store user's name for personalization
 
   // Reference to the chat container for auto-scrolling
   const chatContainerRef = useRef(null);
@@ -68,26 +67,7 @@ function Chat() {
     await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 400)); // 300-700ms
   };
 
-  // Fetch user data to personalize greetings
-  const fetchUserData = async () => {
-    if (!email) return;
 
-    try {
-      const data = await apiPost("api/clerk_sync", { email });
-      if (data.user_id) {
-        // Try to get user's first name from the response
-        // Note: The current API doesn't return firstName, but we can enhance it later
-        // For now, we'll extract name from email if available
-        // const emailName = email.split('@')[0];
-        const capitalizedName = data.firstName
-        setUserName(capitalizedName);
-        return capitalizedName;
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    }
-    return null;
-  };
 
   const handleSendMessage = async () => {
     // Use the processMessage function to handle the input
@@ -202,6 +182,18 @@ function Chat() {
           "and companion:",
           name
         );
+
+        // Mark messages as read when opening chat
+        try {
+          await apiPost("api/mark_as_read", {
+            user_id: userId,
+            companion_name: name
+          });
+          console.log("Messages marked as read");
+        } catch (readError) {
+          console.error("Error marking messages as read:", readError);
+        }
+
         const data = await apiGet(`api/get_chat_history?user_id=${userId}&companion_name=${name}`);
         if (data.success && data.messages && data.messages.length > 0) {
           console.log(
@@ -212,103 +204,21 @@ function Chat() {
           setMessages(data.messages);
           // We'll scroll to bottom after messages are loaded in a separate useEffect
         } else {
-          console.log("No chat history found or empty history - generating welcome message");
-          // Generate welcome message for new conversations
-          await generateWelcomeMessage();
+          console.log("No chat history found - starting with empty chat");
+          // Start with empty messages array for new conversations
+          setMessages([]);
         }
       } catch (error) {
         console.error("Error loading chat history:", error);
+        // Start with empty messages on error
+        setMessages([]);
       }
     };
 
     loadChatHistory();
   }, [userId, name]);
 
-  // Generate simple welcome message for new conversations with typing simulation
-  const generateWelcomeMessage = async () => {
-    if (!userId || !name) return;
 
-    try {
-      console.log("Generating simple welcome message for", userName);
-
-      // Fetch user data for personalization
-      const fetchedName = await fetchUserData();
-
-      // Brief pause before starting to type (makes it feel more natural)
-      await simulateBriefPause();
-
-      // Generate random delay for the welcome message (2-5 seconds)
-      const typingDelay = getRandomTypingDelay();
-
-      // Show typing indicator with animated dots
-      await simulateTyping(typingDelay);
-
-
-      // Create a personalized welcome message
-      const greeting = fetchedName ? `Hey ${fetchedName}!` : "Hey!";
-      const welcomeMessage = {
-        text: `${greeting} How are you doing today?`,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        sender: "bot",
-      };
-
-      setMessages([welcomeMessage]);
-
-      // Save the welcome message to database for persistence
-      try {
-        await apiPost("api/save_bot_message", {
-          message_text: welcomeMessage.text,
-          name: name,
-          personality: personality || "friendly",
-          user_id: userId,
-          image: image,
-        });
-        console.log("Welcome message saved to database successfully");
-      } catch (saveError) {
-        console.error("Error saving welcome message to database:", saveError);
-        // Continue even if saving fails - user still sees the message
-      }
-
-    } catch (error) {
-      console.error("Error generating welcome message:", error);
-      setIsTyping(false);
-      setTypingDots("");
-
-      // Add a fallback welcome message with typing simulation
-      await simulateBriefPause();
-      const typingDelay = getRandomTypingDelay();
-      await simulateTyping(typingDelay);
-
-      const greeting = userName ? `Hey ${userName}!` : "Hey!";
-      const fallbackMessage = {
-        text: `${greeting} How are you doing today?`,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        sender: "bot",
-      };
-      setMessages([fallbackMessage]);
-
-      // Save the fallback welcome message to database for persistence
-      try {
-        await apiPost("api/save_bot_message", {
-          message_text: fallbackMessage.text,
-          name: name,
-          personality: personality || "friendly",
-          user_id: userId,
-          image: image,
-        });
-        console.log("Fallback welcome message saved to database successfully");
-      } catch (saveError) {
-        console.error("Error saving fallback welcome message to database:", saveError);
-        // Continue even if saving fails - user still sees the message
-      }
-    }
-  };
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {

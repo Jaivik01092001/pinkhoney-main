@@ -206,11 +206,7 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Body**: `{ message, name, personality, image, user_id }`
   - **Response**: AI-generated text response
 
-- `POST /api/get_welcome_message` - Generate welcome message for new conversations
 
-  - **Auth**: Required in production
-  - **Body**: `{ name, personality, image, user_id }`
-  - **Response**: AI-generated welcome message
 
 - `GET /api/get_chat_history` - Get chat history for a user and companion
   - **Auth**: Required in production

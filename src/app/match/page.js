@@ -4,6 +4,7 @@ import { Heart, X, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import NavigationBar from '../components/NavigationBar';
+import { apiPost } from '@/services/api';
 
 const Index = () => {
   const searchParams = useSearchParams()
@@ -16,15 +17,44 @@ const Index = () => {
   const router = useRouter()
 
   const [showWelcome, setShowWelcome] = React.useState(true);
+  const [isGeneratingFirstMessage, setIsGeneratingFirstMessage] = React.useState(false);
 
   const handleStartClick = () => {
     setShowWelcome(false);
     router.push(`/terms`)
   };
 
-  function handle_match_click() {
-    router.push(`/chat?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`)
-  }
+  // Generate first message when user clicks "Send a Message"
+  const handle_match_click = async () => {
+    if (!user_id || !name || !personality) {
+      // If missing required data, go directly to chat
+      router.push(`/chat?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`);
+      return;
+    }
+
+    setIsGeneratingFirstMessage(true);
+
+    try {
+      // Generate first message in the background
+      const response = await apiPost("api/generate_first_message", {
+        user_id: user_id,
+        companion_name: name,
+        personality: personality,
+        image: image
+      });
+
+      console.log("First message generation result:", response);
+
+      // Navigate to chat regardless of first message generation result
+      router.push(`/chat?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`);
+    } catch (error) {
+      console.error("Error generating first message:", error);
+      // Still navigate to chat even if first message generation fails
+      router.push(`/chat?name=${name}&personality=${personality}&image=${image}&user_id=${user_id}&email=${email}`);
+    } finally {
+      setIsGeneratingFirstMessage(false);
+    }
+  };
 
   function go_to_pricing() {
     router.push(`/pricing?user_id=${user_id}&email=${email}`)
@@ -131,9 +161,10 @@ const Index = () => {
           <div className="p-8 send-keep-swiping-button">
             <button
               onClick={handle_match_click}
-              className="w-full bg-pink-500 text-white rounded-full py-3 px-6 font-medium hover:bg-pink-600 transition-colors text-lg"
+              disabled={isGeneratingFirstMessage}
+              className="w-full bg-pink-500 text-white rounded-full py-3 px-6 font-medium hover:bg-pink-600 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Send a Message
+              {isGeneratingFirstMessage ? "Preparing Chat..." : "Send a Message"}
             </button>
             <button
               onClick={go_to_home}
