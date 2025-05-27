@@ -1,7 +1,7 @@
 /**
  * AI response controller
  */
-const { getAIResponse, getWelcomeMessage } = require("../services/aiService");
+const { getAIResponse } = require("../services/aiService");
 const { saveChatMessage, getChatHistory } = require("../services/mongoService");
 
 /**
@@ -141,131 +141,11 @@ const getChatHistoryHandler = async (req, res) => {
   }
 };
 
-/**
- * Generate welcome message for new conversations
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
-const getWelcomeMessageHandler = async (req, res) => {
-  try {
-    const { name, personality, image, user_id } = req.body;
 
-    // Validate required fields
-    if (!name || !personality) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields: name or personality",
-      });
-    }
 
-    // Generate welcome message
-    const welcomeMessages = await getWelcomeMessage(name, personality);
 
-    // Save welcome messages to chat history if user_id is provided
-    if (user_id) {
-      try {
-        let savedResponses = 0;
-        for (const welcomeText of welcomeMessages) {
-          try {
-            const welcomeMessage = {
-              text: welcomeText,
-              sender: "bot",
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              timestamp: new Date(),
-            };
-
-            await saveChatMessage(user_id, name, personality, image, welcomeMessage);
-            savedResponses++;
-          } catch (saveError) {
-            console.error("Error saving welcome message:", saveError);
-            // Continue with other messages even if one fails
-          }
-        }
-
-        console.log(
-          `Successfully saved ${savedResponses} out of ${welcomeMessages.length} welcome messages`
-        );
-      } catch (error) {
-        console.error("Error saving welcome messages:", error);
-        // Continue execution even if saving fails
-      }
-    }
-
-    // Return response
-    res.status(200).json({
-      success: true,
-      llm_ans: welcomeMessages, // Match the format expected by the frontend
-    });
-  } catch (error) {
-    console.error("Error in getWelcomeMessageHandler:", error);
-
-    // Send a more user-friendly error response
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate welcome message. Please try again.",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-};
-
-/**
- * Save a bot message directly to chat history
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
-const saveBotMessageHandler = async (req, res) => {
-  try {
-    const { message_text, name, personality, image, user_id } = req.body;
-
-    // Validate required fields
-    if (!message_text || !name || !personality || !user_id) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields: message_text, name, personality, or user_id",
-      });
-    }
-
-    // Create bot message object
-    const botMessage = {
-      text: message_text,
-      sender: "bot",
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      timestamp: new Date(),
-    };
-
-    // Save bot message to chat history
-    await saveChatMessage(user_id, name, personality, image, botMessage);
-
-    console.log(`Bot message saved successfully for user ${user_id} with companion ${name}`);
-
-    // Return success response
-    res.status(200).json({
-      success: true,
-      message: "Bot message saved successfully",
-    });
-  } catch (error) {
-    console.error("Error in saveBotMessageHandler:", error);
-
-    // Send a more user-friendly error response
-    res.status(500).json({
-      success: false,
-      error: "Failed to save bot message. Please try again.",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-};
 
 module.exports = {
   getAIResponseHandler,
   getChatHistoryHandler,
-  getWelcomeMessageHandler,
-  saveBotMessageHandler,
 };
