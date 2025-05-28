@@ -6,11 +6,13 @@ Pink Honey is a modern web application that provides users with AI companions fo
 
 Pink Honey aims to provide companionship and emotional support through AI-powered virtual companions. Users can:
 
-- Browse through a variety of AI companion profiles
-- Match with companions that interest them
-- Engage in text-based conversations
+- Browse through a variety of AI companion profiles with detailed personalities
+- Swipe and match with companions that interest them
+- Engage in text-based conversations with memory-enhanced AI
 - Have voice calls with their AI companions
-- Subscribe to premium features for enhanced experiences
+- Receive automatic first messages when matching
+- Access premium features for enhanced experiences
+- View conversation history and manage multiple chats
 
 The application is designed to help users combat loneliness, find emotional support, and enjoy engaging conversations in a safe, judgment-free environment.
 
@@ -18,115 +20,194 @@ The application is designed to help users combat loneliness, find emotional supp
 
 ### Frontend
 
-- **Next.js 14** - React framework with server-side rendering
-- **React** - UI library for building user interfaces
+- **Next.js 14** - React framework with App Router
+- **React 18** - UI library for building user interfaces
 - **Tailwind CSS** - Utility-first CSS framework for styling
-- **Framer Motion** - Animation library for React
+- **Framer Motion** - Animation library for smooth interactions
 - **Clerk** - Authentication and user management
-- **Stripe** - Payment processing integration
-- **Socket.IO Client** - Real-time communication
-- **React Query** - Data fetching and state management
-- **Axios** - HTTP client
+- **Lucide React** - Modern icon library
+- **React Icons** - Additional icon components
+- **React Swipeable** - Touch gesture support for swiping
+- **TypeScript** - Type safety and better development experience
 
 ### Backend
 
-- **Node.js** - JavaScript runtime environment
+- **Node.js 18+** - JavaScript runtime environment
 - **Express.js** - Web application framework
 - **MongoDB** - NoSQL database for data storage
 - **Mongoose** - MongoDB object modeling
-- **Socket.IO** - Real-time bidirectional communication
-- **OpenAI Whisper** - Speech-to-text transcription
 - **OpenAI GPT-4o** - AI conversation generation
+- **OpenAI Whisper** - Speech-to-text transcription
 - **OpenAI TTS** - Text-to-speech synthesis
 - **Stripe API** - Payment processing and subscription management
-- **Clerk** - Authentication and user management
-- **Joi** - Request validation
+- **Clerk Backend** - Authentication and user management
+- **Joi** - Request validation and schema validation
 - **Helmet** - Security middleware
+- **Express Rate Limit** - API rate limiting
+- **Winston** - Logging framework
+- **Multer** - File upload handling
+- **Firebase Admin** - Additional cloud services
 
 ## Architecture
 
 The project follows a modern architecture with clear separation of concerns:
 
 ```
-pinkhoney/
-├── backend/            # Express.js backend
-│   ├── config/         # Configuration files
-│   ├── controllers/    # Request handlers
-│   ├── middleware/     # Express middleware
-│   ├── models/         # Data models
-│   ├── routes/         # API routes
-│   ├── services/       # Business logic
-│   ├── utils/          # Utility functions
-│   ├── .env.example    # Example environment variables
-│   ├── index.js        # Main entry point
-│   └── package.json    # Backend dependencies
-├── public/             # Static assets and images
-├── src/                # Frontend source code
-│   ├── app/            # Next.js app directory
-│   │   ├── api/        # Next.js API routes
-│   │   ├── (auth)/     # Authentication pages
-│   │   ├── (dashboard)/# Dashboard pages
-│   │   ├── (marketing)/# Marketing pages
-│   │   ├── components/ # React components
-│   │   ├── all_chats/  # All chats page
-│   │   ├── call/       # Voice call page
-│   │   ├── chat/       # Chat page
-│   │   ├── home/       # Home page with profiles
-│   │   ├── match/      # Match page
-│   │   ├── pricing/    # Subscription plans
-│   │   └── ...         # Other pages
-│   ├── components/     # React components
-│   │   ├── ui/         # UI components
-│   │   ├── forms/      # Form components
-│   │   ├── chat/       # Chat components
-│   │   └── voice/      # Voice call components
-│   ├── hooks/          # Custom React hooks
-│   ├── lib/            # Utility functions
-│   ├── providers/      # Context providers
-│   ├── styles/         # Global styles
-│   └── middleware.ts   # Next.js middleware
-├── .next/              # Next.js build output
-├── package.json        # Frontend dependencies
-└── README.md           # Project documentation
+pinkhoney-main/
+├── backend/                    # Express.js backend
+│   ├── config/                 # Configuration files
+│   │   ├── config.js          # Application configuration
+│   │   └── database.js        # MongoDB connection
+│   ├── controllers/           # Request handlers
+│   │   ├── aiController.js    # AI conversation logic
+│   │   ├── clerkController.js # Clerk authentication
+│   │   ├── companionController.js # Companion management
+│   │   ├── messageController.js # Message handling
+│   │   ├── stripeController.js # Payment processing
+│   │   └── userController.js  # User management
+│   ├── middleware/            # Express middleware
+│   │   ├── cors.js           # CORS configuration
+│   │   ├── errorHandler.js   # Global error handling
+│   │   ├── logger.js         # Request logging
+│   │   ├── requestValidation.js # Input validation
+│   │   ├── securityMiddleware.js # Security headers
+│   │   └── userValidation.js # User authentication
+│   ├── models/               # MongoDB data models
+│   │   ├── ChatHistory.js    # Chat conversations
+│   │   ├── Companion.js      # AI companion profiles
+│   │   ├── Match.js          # User-companion matches
+│   │   ├── Payment.js        # Payment records
+│   │   └── User.js           # User accounts
+│   ├── routes/               # API route definitions
+│   │   ├── aiRoutes.js       # AI conversation endpoints
+│   │   ├── clerkRoutes.js    # Authentication endpoints
+│   │   ├── companionRoutes.js # Companion endpoints
+│   │   ├── messageRoutes.js  # Message endpoints
+│   │   ├── stripeRoutes.js   # Payment endpoints
+│   │   └── userRoutes.js     # User endpoints
+│   ├── services/             # Business logic services
+│   │   ├── aiService.js      # AI conversation service
+│   │   ├── firestoreService.js # Firebase integration
+│   │   ├── firstMessageService.js # First message generation
+│   │   ├── memoryService.js  # Conversation memory
+│   │   ├── mongoService.js   # Database operations
+│   │   ├── speechService.js  # Voice processing
+│   │   └── stripeService.js  # Payment processing
+│   ├── seeders/              # Database seeding scripts
+│   │   ├── companionSeeder.js # Companion data seeder
+│   │   ├── companionSeederBulk.js # Bulk companion seeder
+│   │   └── clearCompanions.js # Database cleanup
+│   ├── utils/                # Utility functions
+│   │   └── clerkUtils.js     # Clerk helper functions
+│   ├── public/audio/         # Audio file storage
+│   ├── temp/                 # Temporary file storage
+│   ├── uploads/              # File upload storage
+│   ├── Dockerfile            # Backend containerization
+│   ├── index.js              # Main entry point
+│   └── package.json          # Backend dependencies
+├── src/                      # Frontend source code
+│   ├── app/                  # Next.js App Router pages
+│   │   ├── all_chats/        # Chat history page
+│   │   ├── call/             # Voice call interface
+│   │   ├── chat/             # Individual chat page
+│   │   ├── companion/[id]/   # Companion detail page
+│   │   ├── components/       # Shared React components
+│   │   ├── create_account/   # Account creation
+│   │   ├── home/             # Profile swiping page
+│   │   ├── match/            # Match confirmation page
+│   │   ├── pricing/          # Subscription plans
+│   │   ├── profile/          # User profile page
+│   │   ├── sign_in/          # Authentication page
+│   │   ├── subscribed/       # Subscription success
+│   │   ├── swipe_test/       # Swipe testing page
+│   │   ├── terms/            # Terms of service
+│   │   ├── tokens/           # Token purchase page
+│   │   ├── globals.css       # Global styles
+│   │   ├── layout.js         # Root layout component
+│   │   └── page.js           # Landing page
+│   ├── hooks/                # Custom React hooks
+│   │   └── useLocalStorage.js # Local storage hook
+│   ├── services/             # Frontend API services
+│   │   └── api.js            # API client functions
+│   ├── utils/                # Frontend utilities
+│   └── middleware.js         # Next.js middleware
+├── public/                   # Static assets
+│   ├── [companion-images]/   # AI companion profile images
+│   ├── favicon.ico           # Site favicon
+│   ├── home_avatar.jpg       # Default avatar
+│   └── pricing_top.PNG       # Pricing page header
+├── Dockerfile                # Frontend containerization
+├── next.config.mjs           # Next.js configuration
+├── tailwind.config.js        # Tailwind CSS configuration
+├── postcss.config.mjs        # PostCSS configuration
+├── jsconfig.json             # JavaScript configuration
+├── package.json              # Frontend dependencies
+└── README.md                 # Project documentation
 ```
 
 ## Features
 
 ### Core Features
 
-- **Profile Browsing**: Swipe through AI companion profiles
-- **Matching System**: Match with AI companions that interest you
-- **Text Chat**: Engage in text-based conversations with AI companions
-- **Voice Calls**: Have voice conversations with AI companions
-- **User Authentication**: Secure login and account management
+- **Profile Browsing**: Swipe through AI companion profiles with detailed personalities
+- **Smart Matching System**: Match with AI companions using like, super like, and favorite options
+- **Memory-Enhanced Chat**: Engage in text conversations with AI that remembers your interactions
+- **Voice Calls**: Have voice conversations with AI companions using OpenAI TTS/STT
+- **Automatic First Messages**: AI companions send personalized first messages when you match
+- **User Authentication**: Secure login and account management with Clerk
+- **Subscription Management**: Flexible payment plans with Stripe integration
+
+### Enhanced Personality System
+
+Each AI companion features:
+
+- **Structured Personality Traits**: Detailed personality archetypes for consistent behavior
+- **Dynamic Memory System**: Long-term and short-term conversation memory
+- **Relationship Progression**: AI companions remember milestones and emotional history
+- **Personalized Responses**: Context-aware responses based on conversation history
+- **First Message Templates**: Customized greeting messages based on personality
 
 ### Chat Interface
 
-The chat interface allows users to:
+The chat interface provides:
 
-- Send and receive messages with AI companions
-- View chat history
-- Share images and links
-- Customize companion personalities
+- **Real-time Messaging**: Instant text conversations with AI companions
+- **Message History**: Complete conversation history with search capabilities
+- **Unread Message Tracking**: Visual indicators for new messages
+- **Message Previews**: Quick preview of recent conversations in inbox
+- **Auto-scroll**: Automatic positioning to latest messages
+- **Responsive Design**: Mobile-optimized chat experience
 
 ### Voice Conversations
 
-The voice conversation feature allows users to:
+Advanced voice features include:
 
-- Speak directly to AI companions
-- Hear AI responses in natural-sounding voices
-- Have continuous conversations
-- Control voice settings
+- **Speech-to-Text**: Convert voice input to text using OpenAI Whisper
+- **Text-to-Speech**: Natural AI voice responses using OpenAI TTS
+- **Real-time Processing**: Live voice conversation capabilities
+- **Voice Call Interface**: Dedicated UI for voice interactions
+- **Call Duration Tracking**: Monitor conversation length
+- **Mute/Unmute Controls**: Full call control options
+
+### Swiping & Matching
+
+Interactive profile discovery:
+
+- **Touch Gestures**: Swipe left/right with smooth animations
+- **Profile History**: Go back to previously viewed profiles
+- **Match Confirmation**: Dedicated match celebration page
+- **Profile Details**: Detailed companion information and personality traits
+- **Sequential Browsing**: Organized profile progression with history tracking
 
 ### Premium Features
 
-- **Unlimited Likes**: No restrictions on how many companions you can like
-- **Super Likes**: Increase your chances of matching
-- **Unlimited Rewinds**: Go back to profiles you accidentally passed
-- **Faster Responses**: Priority processing for your messages
-- **Priority Access**: Early access to new features
-- **Photo Requests**: Request custom photos (coming soon)
-- **Voice Chats**: Enhanced voice interaction (coming soon)
+Subscription benefits include:
+
+- **Unlimited Matches**: No restrictions on companion interactions
+- **Priority Processing**: Faster AI response times
+- **Enhanced Memory**: Extended conversation memory capabilities
+- **Advanced Features**: Access to latest AI improvements
+- **Premium Support**: Priority customer service
 
 ## Middleware System
 
@@ -191,12 +272,12 @@ All API endpoints are protected with appropriate middleware for authentication, 
 
   - **Auth**: Required in production
   - **Params**: `id` (MongoDB ObjectId)
-  - **Response**: Single companion object
+  - **Response**: Single companion object with full personality details
 
 - `GET /api/companions/name/:name` - Get companion by name
   - **Auth**: Required in production
   - **Params**: `name` (companion name, case-insensitive)
-  - **Response**: Single companion object
+  - **Response**: Single companion object with personality traits
 
 ### AI Conversations
 
@@ -204,27 +285,62 @@ All API endpoints are protected with appropriate middleware for authentication, 
 
   - **Auth**: Required in production
   - **Body**: `{ message, name, personality, image, user_id }`
-  - **Response**: AI-generated text response
-
-
+  - **Response**: AI-generated text response with memory integration
 
 - `GET /api/get_chat_history` - Get chat history for a user and companion
+
   - **Auth**: Required in production
   - **Query**: `user_id, companion_name`
-  - **Response**: Array of chat messages
+  - **Response**: Array of chat messages with timestamps and metadata
 
-### Voice Calls
+- `GET /api/get_user_chat_summaries` - Get user's chat summaries for inbox
+  - **Auth**: Required in production
+  - **Query**: `user_id`
+  - **Response**: Array of chat threads with previews and unread counts
 
-- `POST /api/voice/initiate` - Initiate a voice call session
+### Message Management
+
+- `POST /api/generate_first_message` - Generate automatic first message on match
 
   - **Auth**: Required in production
-  - **Body**: `{ user_id, companion_name, personality }`
-  - **Response**: Call session information
+  - **Body**: `{ user_id, companion_name, personality, image }`
+  - **Response**: Generated first message
 
-- `POST /api/voice/end` - End a voice call session
+- `GET /api/get_user_inbox` - Get user's inbox with message previews
+
   - **Auth**: Required in production
-  - **Body**: `{ call_id }`
-  - **Response**: Call session summary
+  - **Query**: `user_id`
+  - **Response**: Inbox data with conversation previews
+
+- `POST /api/mark_as_read` - Mark messages as read
+
+  - **Auth**: Required in production
+  - **Body**: `{ user_id, companion_name }`
+  - **Response**: Updated read status
+
+- `GET /api/check_first_message_needed` - Check if first message generation is needed
+  - **Auth**: Required in production
+  - **Query**: `user_id, companion_name`
+  - **Response**: Boolean indicating if first message is needed
+
+### Voice Processing
+
+- `POST /api/voice/speech-to-text` - Convert speech to text
+
+  - **Auth**: Required in production
+  - **Body**: Audio file (multipart/form-data)
+  - **Response**: Transcribed text
+
+- `POST /api/voice/text-to-speech` - Convert text to speech
+
+  - **Auth**: Required in production
+  - **Body**: `{ text, voice_id }`
+  - **Response**: Audio file or audio URL
+
+- `POST /api/voice/process` - Process voice input and get AI response
+  - **Auth**: Required in production
+  - **Body**: Audio file with companion context
+  - **Response**: AI response as audio
 
 ### Payments
 
@@ -233,6 +349,18 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Auth**: None (public endpoint)
   - **Query**: `{ priceId?, email?, plan?, success_url?, cancel_url? }`
   - **Response**: Stripe checkout session URL
+
+- `GET /api/check_payment_status/:sessionId` - Check payment status
+
+  - **Auth**: None (public endpoint)
+  - **Params**: `sessionId` (Stripe session ID)
+  - **Response**: Payment status and details
+
+- `POST /api/direct_stripe_check` - Direct Stripe payment verification
+
+  - **Auth**: None (public endpoint)
+  - **Body**: `{ session_id }`
+  - **Response**: Direct Stripe session status
 
 - `POST /api/webhook` - Handle Stripe webhook events
   - **Auth**: Stripe signature verification
@@ -252,17 +380,50 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Auth**: None (public endpoint)
   - **Response**: Server status information
 
-## Real-time Communication
+## Database Models
 
-The application uses Socket.IO for real-time voice communication between the frontend and backend:
+Pink Honey uses MongoDB with the following data models:
 
-### Socket Events
+### User Model
+- **user_id**: Unique user identifier
+- **email**: User email address
+- **clerkId**: Clerk authentication ID
+- **firstName/lastName**: User name information
+- **tokens**: Available tokens for premium features
+- **subscription**: Subscription plan and status details
 
-1. **Connection Events**:
+### Companion Model
+- **name**: Companion name
+- **age**: Companion age
+- **bio**: Companion biography
+- **personality**: Structured personality traits and characteristics
+- **interests**: Array of interests and hobbies
+- **imageUrl**: Profile image URL
+- **voiceId**: Voice synthesis identifier
+- **firstMessageTemplates**: Templates for automatic first messages
 
-   - `connection` - Client connects to the server
-   - `disconnect` - Client disconnects from the server
-   - `heartbeat` - Periodic ping to keep connection alive
+### ChatHistory Model
+- **user_id**: Reference to user
+- **companion**: Companion information
+- **messages**: Array of conversation messages
+- **lastMessage**: Most recent message preview
+- **unreadCount**: Number of unread messages
+- **conversationMemory**: Long-term and short-term memory system
+- **isFirstConversation**: Flag for first-time conversations
+
+### Match Model
+- **user_id**: Reference to user
+- **companion**: Matched companion details
+- **matchType**: Type of match (like, super_like, favorite)
+- **isActive**: Match status
+- **lastInteraction**: Timestamp of last interaction
+
+### Payment Model
+- **user_id**: Reference to user
+- **amount**: Payment amount
+- **status**: Payment status (pending, completed, failed)
+- **stripeSessionId**: Stripe session identifier
+- **subscriptionPlan**: Selected subscription plan
 
 
 
@@ -365,37 +526,70 @@ CLERK_SECRET_KEY=your_clerk_secret_key_here
 CLERK_WEBHOOK_SECRET=your_clerk_webhook_secret_here
 ```
 
+## Auto-Seeding System
+
+Pink Honey includes an intelligent auto-seeding system that automatically populates the database with AI companions:
+
+### Features
+- **Automatic Execution**: Runs every time the server starts
+- **Smart Detection**: Only seeds if fewer than 10 companions exist
+- **Idempotent**: Safe to run multiple times without creating duplicates
+- **Non-blocking**: Server continues to start even if seeding fails
+- **Diverse Characters**: Creates 10 unique AI companions with different personalities
+
+### Companion Characters
+The seeder creates companions with varied personality archetypes:
+1. **Luna** (25) - Creative artist and poet
+2. **Marcus** (32) - Tech enthusiast and problem solver
+3. **Sophia** (28) - Wellness coach and mindfulness expert
+4. **Kai** (24) - Adventurous traveler and outdoor enthusiast
+5. **Elena** (30) - Intellectual conversationalist
+6. **Zara** (26) - Fashion expert and confidence coach
+7. **Oliver** (35) - Business mentor and entrepreneur
+8. **Maya** (23) - Musical creative performer
+9. **Alex** (29) - Fitness coach and sports enthusiast
+10. **Iris** (27) - Emotional support specialist
+
 ## MongoDB Integration
 
 Pink Honey uses MongoDB for data storage with the following collections:
 
-- **users**: Stores user information, including authentication details and subscription status
-- **chat_history**: Stores conversation history between users and AI companions
-- **companions**: Stores AI companion profiles and personalities
-- **payments**: Stores payment records and subscription details
+- **users**: User accounts, authentication, and subscription data
+- **chathistory**: Conversation messages with memory system
+- **companions**: AI companion profiles and personalities
+- **matches**: User-companion matching records
+- **payments**: Payment transactions and subscription records
 
-The application uses Mongoose for object modeling and database interactions. When users sign up with Clerk authentication, corresponding user entries are created in MongoDB through:
+The application uses Mongoose for object modeling and database interactions. User creation is handled through:
 
-1. A Clerk webhook endpoint that receives user creation events
-2. The `/api/clerk-auth` Next.js API route that syncs Clerk user data with MongoDB
-3. The `/api/check_email` endpoint that creates or updates user records in MongoDB
+1. Clerk webhook events for user registration
+2. The `/api/check_email` endpoint for user synchronization
+3. Automatic user record creation during authentication
 
 ## Stripe Integration
 
-The application uses Stripe for payment processing with the following features:
+The application uses Stripe for comprehensive payment processing:
 
-- Secure checkout sessions for subscription payments
-- Webhook handling for payment events
-- Customer name and address collection for compliance with regulations
-- Automatic subscription management
+### Features
+- **Secure Checkout**: Hosted checkout sessions for subscriptions
+- **Webhook Processing**: Real-time payment event handling
+- **Customer Management**: Automatic customer record creation
+- **Payment Verification**: Multiple verification methods for reliability
+- **Subscription Management**: Automated subscription lifecycle management
 
 ### Subscription Plans
 
-Pink Honey offers three subscription tiers:
+Pink Honey offers flexible subscription options:
 
-- **Lifetime**: $99.99 one-time payment
-- **Yearly**: $99.99/year
-- **Monthly**: $19.99/month
+- **Monthly**: $19.99/month - Full access to all features
+- **Yearly**: $99.99/year - Annual subscription with savings
+- **Lifetime**: $99.99 one-time - Permanent access to all features
+
+### Payment Security
+- **Address Collection**: Compliance with international regulations
+- **Signature Verification**: Webhook signature validation
+- **Duplicate Prevention**: Protection against duplicate payments
+- **Status Tracking**: Real-time payment status monitoring
 
 ## API Testing with Postman
 
