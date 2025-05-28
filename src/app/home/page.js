@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { apiPost, apiGet } from "@/services/api";
 import NavigationBar from "../components/NavigationBar";
+import BottomNavigation from "../components/BottomNavigation";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
 export default function Home() {
@@ -79,17 +80,17 @@ export default function Home() {
       setLoading(true);
       setError(null);
 
-      const response = await apiGet('api/companions');
+      const response = await apiGet("api/companions");
 
       if (response.success && response.data) {
         // Sort profiles by ID to ensure consistent sequential order
         const sortedProfiles = [...response.data].sort((a, b) => a.id - b.id);
         set_original_profiles(sortedProfiles);
       } else {
-        throw new Error('Failed to fetch companions');
+        throw new Error("Failed to fetch companions");
       }
     } catch (error) {
-      console.error('Error fetching companions:', error);
+      console.error("Error fetching companions:", error);
       setError(error.message);
       // Fallback to empty array if API fails
       set_original_profiles([]);
@@ -104,14 +105,20 @@ export default function Home() {
   }, []); // Ensure this runs only once on component mount
 
   // Create user-specific localStorage keys
-  const userProfileIndexKey = `user_${user_id || 'guest'}_currentProfileIndex`;
-  const userProfileHistoryKey = `user_${user_id || 'guest'}_profileHistory`;
+  const userProfileIndexKey = `user_${user_id || "guest"}_currentProfileIndex`;
+  const userProfileHistoryKey = `user_${user_id || "guest"}_profileHistory`;
 
   // Use localStorage to persist the current profile index and history
-  const [currentIndex, setCurrentIndex] = useLocalStorage(userProfileIndexKey, 0);
+  const [currentIndex, setCurrentIndex] = useLocalStorage(
+    userProfileIndexKey,
+    0
+  );
   const [direction, setDirection] = useState(null);
   // Add state to track profile history for the "swipe back" feature with persistence
-  const [profileHistory, setProfileHistory] = useLocalStorage(userProfileHistoryKey, []);
+  const [profileHistory, setProfileHistory] = useLocalStorage(
+    userProfileHistoryKey,
+    []
+  );
 
   // Ensure the currentIndex is valid (in case the number of profiles has changed)
   useEffect(() => {
@@ -132,13 +139,28 @@ export default function Home() {
 
   const currentProfile = profiles[currentIndex];
 
-  const swipe = (direction, name, personality, image) => {
+  const swipe = async (direction, name, personality, image) => {
     setDirection(direction);
 
     // Save current index to history before changing it
-    setProfileHistory(prev => [...prev, currentIndex]);
+    setProfileHistory((prev) => [...prev, currentIndex]);
 
     if (direction === "right") {
+      // Save the match to the database
+      try {
+        await apiPost("api/save_match", {
+          user_id: user_id,
+          name: name,
+          personality: personality,
+          image: image,
+          matchType: "like",
+        });
+        console.log(`Match saved for ${name}`);
+      } catch (error) {
+        console.error("Error saving match:", error);
+        // Continue with navigation even if match saving fails
+      }
+
       // For right swipe (heart icon), only navigate to match page without advancing to next profile
       setTimeout(() => {
         setDirection(null);
@@ -167,7 +189,7 @@ export default function Home() {
       setDirection("back");
 
       // Remove the last index from history
-      setProfileHistory(prev => prev.slice(0, -1));
+      setProfileHistory((prev) => prev.slice(0, -1));
 
       setTimeout(() => {
         setDirection(null);
@@ -178,6 +200,10 @@ export default function Home() {
 
   function go_to_pricing() {
     router.push(`/pricing?user_id=${user_id}&email=${email}`);
+  }
+
+  function go_to_messages() {
+    router.push(`/all_chats?user_id=${user_id}&email=${email}`);
   }
 
   return (
@@ -251,11 +277,23 @@ export default function Home() {
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <div className="text-red-500 mb-4">
-                    <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    <svg
+                      className="w-12 h-12 mx-auto"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 16.5c-.77.833.192 2.5 1.732 2.5z"
+                      />
                     </svg>
                   </div>
-                  <p className="text-gray-600 mb-4">Failed to load companions</p>
+                  <p className="text-gray-600 mb-4">
+                    Failed to load companions
+                  </p>
                   <button
                     onClick={fetchCompanions}
                     className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors"
@@ -283,15 +321,15 @@ export default function Home() {
                   initial={
                     direction
                       ? {
-                        x:
-                          direction === "right"
-                            ? -300
-                            : direction === "left"
+                          x:
+                            direction === "right"
+                              ? -300
+                              : direction === "left"
                               ? 300
                               : direction === "back"
-                                ? -300
-                                : 0,
-                      }
+                              ? -300
+                              : 0,
+                        }
                       : false
                   }
                   animate={{ x: 0, rotate: 0 }}
@@ -300,18 +338,18 @@ export default function Home() {
                       direction === "right"
                         ? 300
                         : direction === "left"
-                          ? -300
-                          : direction === "back"
-                            ? 300
-                            : 0,
+                        ? -300
+                        : direction === "back"
+                        ? 300
+                        : 0,
                     rotate:
                       direction === "right"
                         ? 20
                         : direction === "left"
-                          ? -20
-                          : direction === "back"
-                            ? 20
-                            : 0,
+                        ? -20
+                        : direction === "back"
+                        ? 20
+                        : 0,
                   }}
                   transition={{ duration: 0.3 }}
                   className="absolute w-full"
@@ -320,10 +358,48 @@ export default function Home() {
                   <div className="relative rounded-2xl overflow-hidden shadow-xl shadow-red-500">
                     {/* Image */}
                     <img
-                      src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${currentProfile.image}`}
+                      src={`${
+                        process.env.NEXT_PUBLIC_BACKEND_URL ||
+                        "http://localhost:8080"
+                      }${currentProfile.image}`}
                       alt="Profile"
                       className="w-full h-[600px] object-cover "
                     />
+
+                    {/* Detail Button */}
+                    <button
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+                        if (user_id) queryParams.append("user_id", user_id);
+                        if (email) queryParams.append("email", email);
+                        queryParams.append("returnUrl", "/home");
+
+                        const queryString = queryParams.toString();
+                        const detailUrl = queryString
+                          ? `/companion/${currentProfile._id}?${queryString}`
+                          : `/companion/${currentProfile._id}`;
+
+                        router.push(detailUrl);
+                      }}
+                      className="absolute top-4 right-4 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="text-white"
+                      >
+                        <path
+                          d="M12 16V12M12 8H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
 
                     {/* Gradient Overlay */}
                     <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/60 to-transparent">
@@ -340,10 +416,11 @@ export default function Home() {
                         <button
                           onClick={swipeBack}
                           disabled={profileHistory.length === 0}
-                          className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${profileHistory.length === 0
-                            ? "opacity-50 cursor-not-allowed"
-                            : "hover:bg-gray-100"
-                            }`}
+                          className={`w-14 h-14 flex items-center justify-center rounded-full bg-white shadow-lg transition-colors ${
+                            profileHistory.length === 0
+                              ? "opacity-50 cursor-not-allowed"
+                              : "hover:bg-gray-100"
+                          }`}
                         >
                           <svg
                             width="24"
@@ -370,7 +447,7 @@ export default function Home() {
                             viewBox="0 0 24 24"
                             fill="none"
                             xmlns="http://www.w3.org/2000/svg"
-                            style={{ transform: 'rotate(180deg)' }}
+                            style={{ transform: "rotate(180deg)" }}
                           >
                             <path
                               d="M7.83 11L11.41 7.41L10 6L4 12L10 18L11.41 16.59L7.83 13H20V11H7.83Z"
@@ -432,149 +509,15 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="sticky bottom-2 left-0 right-0 flex justify-center items-center gap-6">
-          {/* Dislike Button */}
-          <button className="w-14 h-14 flex items-center justify-center rounded-full  shadow-lg hover:bg-gray-100 transition-colors">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <rect
-                x="9.49902"
-                y="4.49756"
-                width="13"
-                height="18"
-                rx="2"
-                fill="#E94057"
-                stroke="#F3F3F3"
-              />
-              <rect
-                x="0.391602"
-                y="4.48901"
-                width="13"
-                height="18"
-                rx="2"
-                transform="rotate(-15 0.391602 4.48901)"
-                fill="#E94057"
-                stroke="#F3F3F3"
-              />
-            </svg>
+        {/* Add bottom padding for fixed navigation */}
+        <div className="pb-20"></div>
 
-            {/* <X className="w-8 h-8 text-gray-600" /> */}
-          </button>
-
-          {/* Like Button */}
-          <button className="w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M22 12C22 17.5229 17.5229 22 12 22C9.01325 22 2 22 2 22C2 22 2 14.5361 2 12C2 6.47715 6.47715 2 12 2C17.5229 2 22 6.47715 22 12Z"
-                fill="#ADAFBB"
-                stroke="#ADAFBB"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M7 9H16"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M7 13H16"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M7 17H12"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-
-            {/* <Heart className="w-8 h-8 text-pink-500" /> */}
-          </button>
-
-          {/* Favorite Button */}
-          <button className="w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 10C13.933 10 15.5 8.433 15.5 6.5C15.5 4.56701 13.933 3 12 3C10.067 3 8.5 4.56701 8.5 6.5C8.5 8.433 10.067 10 12 10Z"
-                fill="#ADAFBB"
-                stroke="#ADAFBB"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M3 20.4V21H21V20.4C21 18.1598 21 17.0397 20.5641 16.184C20.1806 15.4314 19.5686 14.8195 18.816 14.436C17.9603 14 16.8402 14 14.6 14H9.4C7.1598 14 6.0397 14 5.18405 14.436C4.43139 14.8195 3.81947 15.4314 3.43598 16.184C3 17.0397 3 18.1598 3 20.4Z"
-                fill="#ADAFBB"
-                stroke="#ADAFBB"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-
-            {/* <Star className="w-8 h-8 text-purple-500" /> */}
-          </button>
-
-          <button className="w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-            <svg
-              width="72"
-              height="48"
-              viewBox="0 0 72 48"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <rect
-                width="72"
-                height="48"
-                rx="6"
-                fill="url(#paint0_linear_11_1446)"
-              />
-              <path
-                d="M42.2152 14.5714C42.3169 14.5714 42.4172 14.5954 42.5077 14.6416C42.5983 14.6878 42.6767 14.7548 42.7363 14.8372L42.7826 14.9117L46.2172 21.3514L46.2541 21.4389L46.2635 21.4714L46.2781 21.5374L46.2866 21.6129L46.2849 21.6986L46.2866 21.6429C46.2858 21.7299 46.2683 21.816 46.2352 21.8966L46.2095 21.948L46.1752 22.0046L46.1306 22.0637L36.5143 33.1757C36.432 33.2857 36.3157 33.3655 36.1835 33.4029L36.1338 33.4149L36.0506 33.4269L36.0001 33.4286L35.9143 33.4226L35.8406 33.4089L35.7523 33.3797L35.7301 33.3694C35.6507 33.3342 35.5799 33.2821 35.5226 33.2169L25.8618 22.0517L25.8086 21.9772L25.7675 21.8974L25.7375 21.8117L25.7178 21.7003V21.5906L25.7306 21.5057L25.7392 21.4714L25.7675 21.39L25.7915 21.3412L29.2201 14.9126C29.2678 14.823 29.3362 14.746 29.4195 14.6879C29.5027 14.6298 29.5986 14.5922 29.6992 14.5783L29.7858 14.5714H42.2152ZM39.3489 22.2857H32.6503L36.0018 30.9943L39.3489 22.2857ZM31.2746 22.2857H27.7629L34.0826 29.5869L31.2746 22.2857ZM44.2363 22.2857H40.7281L37.9226 29.5809L44.2363 22.2857ZM32.5929 15.8563H30.1715L27.4286 21H31.2206L32.5929 15.8563ZM38.0786 15.8563H33.9232L32.5518 21H39.4492L38.0786 15.8563ZM41.8295 15.8563H39.4081L40.7803 21H44.5715L41.8295 15.8563Z"
-                fill="white"
-              />
-              <defs>
-                <linearGradient
-                  id="paint0_linear_11_1446"
-                  x1="36"
-                  y1="0"
-                  x2="36"
-                  y2="48"
-                  gradientUnits="userSpaceOnUse"
-                >
-                  <stop offset="0.305" stopColor="#121212" stopOpacity="0.52" />
-                  <stop offset="1" stopColor="#FE506B" stopOpacity="0.45" />
-                </linearGradient>
-              </defs>
-            </svg>
-
-            {/* <Star className="w-8 h-8 text-purple-500" /> */}
-          </button>
-        </div>
+        {/* Bottom Navigation */}
+        <BottomNavigation
+          userId={user_id}
+          email={email}
+          onMessagesClick={go_to_messages}
+        />
       </div>
     </>
   );

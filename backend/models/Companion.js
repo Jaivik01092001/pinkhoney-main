@@ -53,6 +53,44 @@ const CompanionSchema = new Schema({
     type: String,
     required: true
   },
+  // Enhanced personality system
+  personalityTraits: {
+    type: {
+      primary: {
+        type: String,
+        enum: ['Playful and Flirty', 'Shy and Loyal', 'Confident and Bold', 'Sweet and Caring', 'Mysterious and Intriguing', 'Bubbly and Energetic'],
+        required: true
+      },
+      secondary: [String], // Additional traits
+      emotionalStyle: {
+        type: String,
+        enum: ['empathetic', 'supportive', 'playful', 'romantic', 'intellectual', 'adventurous'],
+        default: 'supportive'
+      },
+      communicationStyle: {
+        type: String,
+        enum: ['casual', 'formal', 'flirty', 'caring', 'witty', 'deep'],
+        default: 'casual'
+      }
+    },
+    default: function() {
+      return {
+        primary: this.personality || 'Sweet and Caring',
+        secondary: [],
+        emotionalStyle: 'supportive',
+        communicationStyle: 'casual'
+      };
+    }
+  },
+  // First message templates and examples
+  firstMessageTemplates: {
+    type: [{
+      template: String,
+      context: String, // When to use this template
+      tone: String // playful, sweet, mysterious, etc.
+    }],
+    default: []
+  },
   interests: {
     type: [String], // array of emoji + interest string
     default: []

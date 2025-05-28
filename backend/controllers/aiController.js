@@ -1,9 +1,15 @@
 /**
  * AI response controller
  */
-const { getAIResponse, getWelcomeMessage } = require("../services/aiService");
+const { getAIResponse } = require("../services/aiService");
 const { AccessToken, TrackSource  } = require("livekit-server-sdk");
-const { saveChatMessage, getChatHistory } = require("../services/mongoService");
+const memoryService = require("../services/memoryService");
+const {
+  saveChatMessage,
+  getChatHistory,
+  getUserChatSummaries,
+  saveMatch,
+} = require("../services/mongoService");
 
 /**
  * Get AI response for user message
@@ -42,8 +48,8 @@ const getAIResponseHandler = async (req, res) => {
       }
     }
 
-    // Get AI response
-    const aiResponses = await getAIResponse(message, name, personality);
+    // Get AI response with memory context
+    const aiResponses = await getAIResponse(message, name, personality, user_id);
 
     // Save AI responses to chat history if user_id is provided
     if (user_id) {
@@ -77,6 +83,12 @@ const getAIResponseHandler = async (req, res) => {
       console.log(
         `Successfully saved ${savedResponses} out of ${aiResponses.length} AI responses`
       );
+    }
+
+    // Process conversation memory after saving messages (async, don't wait)
+    if (user_id && name) {
+      memoryService.processMemoryAfterConversation(user_id, name)
+        .catch(error => console.error("Memory processing error:", error));
     }
 
     // Return response
@@ -143,70 +155,37 @@ const getChatHistoryHandler = async (req, res) => {
 };
 
 /**
- * Generate welcome message for new conversations
+ * Get all chat summaries for a user
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const getWelcomeMessageHandler = async (req, res) => {
+const getUserChatSummariesHandler = async (req, res) => {
   try {
-    const { name, personality, image, user_id } = req.body;
+    const { user_id } = req.query;
 
     // Validate required fields
-    if (!name || !personality) {
+    if (!user_id) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields: name or personality",
+        error: "Missing required field: user_id",
       });
     }
 
-    // Generate welcome message
-    const welcomeMessages = await getWelcomeMessage(name, personality);
-
-    // Save welcome messages to chat history if user_id is provided
-    if (user_id) {
-      try {
-        let savedResponses = 0;
-        for (const welcomeText of welcomeMessages) {
-          try {
-            const welcomeMessage = {
-              text: welcomeText,
-              sender: "bot",
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              timestamp: new Date(),
-            };
-
-            await saveChatMessage(user_id, name, personality, image, welcomeMessage);
-            savedResponses++;
-          } catch (saveError) {
-            console.error("Error saving welcome message:", saveError);
-            // Continue with other messages even if one fails
-          }
-        }
-
-        console.log(
-          `Successfully saved ${savedResponses} out of ${welcomeMessages.length} welcome messages`
-        );
-      } catch (error) {
-        console.error("Error saving welcome messages:", error);
-        // Continue execution even if saving fails
-      }
-    }
+    // Get chat summaries
+    const chatSummaries = await getUserChatSummaries(user_id);
 
     // Return response
     res.status(200).json({
       success: true,
-      llm_ans: welcomeMessages, // Match the format expected by the frontend
+      chatSummaries: chatSummaries,
     });
   } catch (error) {
-    console.error("Error in getWelcomeMessageHandler:", error);
+    console.error("Error in getUserChatSummariesHandler:", error);
 
     // Send a more user-friendly error response
     res.status(500).json({
       success: false,
-      error: "Failed to generate welcome message. Please try again.",
+      error: "Failed to retrieve chat summaries. Please try again.",
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
@@ -214,53 +193,43 @@ const getWelcomeMessageHandler = async (req, res) => {
 };
 
 /**
- * Save a bot message directly to chat history
+ * Save a match between user and companion
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const saveBotMessageHandler = async (req, res) => {
+const saveMatchHandler = async (req, res) => {
   try {
-    const { message_text, name, personality, image, user_id } = req.body;
+    const { user_id, name, personality, image, matchType } = req.body;
 
     // Validate required fields
-    if (!message_text || !name || !personality || !user_id) {
+    if (!user_id || !name || !personality || !image) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields: message_text, name, personality, or user_id",
+        error: "Missing required fields: user_id, name, personality, image",
       });
     }
 
-    // Create bot message object
-    const botMessage = {
-      text: message_text,
-      sender: "bot",
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      timestamp: new Date(),
-    };
+    // Save the match
+    const match = await saveMatch(user_id, name, personality, image, matchType);
 
-    // Save bot message to chat history
-    await saveChatMessage(user_id, name, personality, image, botMessage);
-
-    console.log(`Bot message saved successfully for user ${user_id} with companion ${name}`);
-
-    // Return success response
+    // Return response
     res.status(200).json({
       success: true,
-      message: "Bot message saved successfully",
+      match: match,
     });
   } catch (error) {
-    console.error("Error in saveBotMessageHandler:", error);
+    console.error("Error in saveMatchHandler:", error);
 
     // Send a more user-friendly error response
     res.status(500).json({
       success: false,
-      error: "Failed to save bot message. Please try again.",
-    })
+      error: "Failed to save match. Please try again.",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
-}
+};
+
 const postVoiceToken = async (req, res) => {
   try {
     console.log(req);
@@ -306,7 +275,7 @@ const postVoiceToken = async (req, res) => {
 module.exports = {
   getAIResponseHandler,
   getChatHistoryHandler,
-  getWelcomeMessageHandler,
-  saveBotMessageHandler,
-  postVoiceToken,
+  getUserChatSummariesHandler,
+  saveMatchHandler,
+  postVoiceToken
 };

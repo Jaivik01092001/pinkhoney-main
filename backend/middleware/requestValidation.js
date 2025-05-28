@@ -65,20 +65,7 @@ const aiSchemas = {
     user_id: Joi.string().optional(),
   }),
 
-  getWelcomeMessage: Joi.object({
-    name: Joi.string().required(),
-    personality: Joi.string().required(),
-    image: Joi.string().optional(),
-    user_id: Joi.string().optional(),
-  }),
 
-  saveBotMessage: Joi.object({
-    message_text: Joi.string().required(),
-    name: Joi.string().required(),
-    personality: Joi.string().required(),
-    image: Joi.string().optional(),
-    user_id: Joi.string().required(),
-  }),
 
   getChatHistory: Joi.object({
     user_id: Joi.string().required(),
@@ -117,8 +104,6 @@ module.exports = {
   validateTokenIncrease: validate(userSchemas.increaseTokens),
 
   validateAIResponse: validate(aiSchemas.getAIResponse),
-  validateWelcomeMessage: validate(aiSchemas.getWelcomeMessage),
-  validateSaveBotMessage: validate(aiSchemas.saveBotMessage),
   validateChatHistory: validate(aiSchemas.getChatHistory, "query"),
 
   validateInitiateCall: validate(voiceSchemas.initiateCall),
