@@ -9,6 +9,8 @@ const {
   getChatHistoryHandler,
   getUserChatSummariesHandler,
   saveMatchHandler,
+  getMemoryDebugHandler,
+  forceMemoryProcessingHandler,
 } = require("../controllers/aiController");
 
 // Import middleware
@@ -23,10 +25,9 @@ const router = express.Router();
 
 // Use conditional authentication middleware
 console.log(
-  `AI routes using ${
-    process.env.NODE_ENV === "production"
-      ? "authenticated"
-      : "non-authenticated"
+  `AI routes using ${process.env.NODE_ENV === "production"
+    ? "authenticated"
+    : "non-authenticated"
   } mode`
 );
 
@@ -85,5 +86,42 @@ router.post(
   },
   saveMatchHandler
 );
+
+// Debug endpoints for memory system (development only)
+if (process.env.NODE_ENV === "development") {
+  // Memory debug endpoint - get memory status
+  router.get(
+    "/debug/memory",
+    (req, res, next) => {
+      // Simple validation for required fields
+      const { user_id, companion_name } = req.query;
+      if (!user_id || !companion_name) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields: user_id, companion_name",
+        });
+      }
+      next();
+    },
+    getMemoryDebugHandler
+  );
+
+  // Force memory processing endpoint
+  router.post(
+    "/debug/memory/process",
+    (req, res, next) => {
+      // Simple validation for required fields
+      const { user_id, companion_name } = req.body;
+      if (!user_id || !companion_name) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields: user_id, companion_name",
+        });
+      }
+      next();
+    },
+    forceMemoryProcessingHandler
+  );
+}
 
 module.exports = router;

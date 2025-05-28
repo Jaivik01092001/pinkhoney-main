@@ -59,8 +59,20 @@ function Chat() {
         return;
       }
 
-      // Use fetch with the centralized API service
-      const response = await fetch(getApiUrl(`api/create_checkout_session?user_id=${user_id}&selected_plan=${selectedPlan}&email=${email}`));
+      // Use fetch with the centralized API service - POST with JSON body
+      const requestBody = {
+        user_id,
+        selected_plan: selectedPlan,
+        email: email || '',
+      };
+
+      const response = await fetch(getApiUrl('api/create_checkout_session'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

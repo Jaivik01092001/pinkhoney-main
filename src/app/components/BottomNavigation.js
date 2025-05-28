@@ -52,6 +52,11 @@ const BottomNavigation = ({
     router.push(constructUrl("/home"));
   };
 
+  // Handle diamond/tokens button click
+  const handleTokensClick = () => {
+    router.push(constructUrl("/tokens"));
+  };
+
   // Check if current page is active
   const isActive = (path) => {
     return pathname === path;
@@ -177,7 +182,12 @@ const BottomNavigation = ({
       </button>
 
       {/* Premium/Special Button */}
-      <button className="w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors">
+      <button
+        onClick={handleTokensClick}
+        className={`w-14 h-14 flex items-center justify-center rounded-full shadow-lg hover:bg-gray-100 transition-colors ${
+          isActive("/tokens") ? "bg-brand-pink" : ""
+        }`}
+      >
         <svg
           width="72"
           height="48"

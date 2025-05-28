@@ -16,7 +16,14 @@ const PaymentSchema = new Schema({
   },
   amount: {
     type: Number,
-    required: true
+    required: true,
+    // Store amount in dollars (e.g., 99.96), not cents
+    get: function(value) {
+      return parseFloat(value.toFixed(2));
+    },
+    set: function(value) {
+      return parseFloat(value.toFixed(2));
+    }
   },
   currency: {
     type: String,
@@ -42,14 +49,16 @@ const PaymentSchema = new Schema({
   },
   subscriptionPlan: {
     type: String,
-    enum: ['monthly', 'yearly', 'lifetime'],
+    enum: ['monthly', 'yearly', 'lifetime', 'tokens'],
     required: true
   },
   metadata: {
     type: Object
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
 module.exports = mongoose.model('Payment', PaymentSchema);

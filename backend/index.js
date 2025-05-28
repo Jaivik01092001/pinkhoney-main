@@ -208,10 +208,14 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           if (user_id && email) {
             console.log(`Creating new payment record for user: ${user_id}, email: ${email}`);
 
+            // Convert amount from cents to dollars
+            const amountInCents = session.amount_total || 1000;
+            const amountInDollars = amountInCents / 100;
+
             const newPayment = new Payment({
               user_id,
               email,
-              amount: session.amount_total || 1000,
+              amount: amountInDollars, // Store amount in dollars, not cents
               currency: session.currency || "usd",
               status: "completed",
               stripeSessionId: session.id,
@@ -286,36 +290,24 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 }));
 
 
-// Apply Clerk authentication middleware (except for webhook route which is handled separately)
+// Apply Clerk authentication middleware (except for webhook and checkout routes)
 app.use((req, res, next) => {
-  // Skip authentication for webhook endpoint
-  if (req.path === '/api/webhook') {
+  // Skip authentication for webhook endpoint and checkout sessions
+  if (req.path === '/api/webhook' ||
+      req.path === '/api/create_checkout_session' ||
+      req.path.startsWith('/api/check_payment_status') ||
+      req.path === '/api/direct_stripe_check') {
     return next();
   }
   authMiddleware(req, res, next);
 });
 
-// Special route for Stripe webhook with raw body parsing
-app.post("/api/webhook", express.raw({ type: 'application/json' }), (req, res) => {
-  const { webhookHandler } = require("./routes/stripeRoutes");
-  webhookHandler(req, res, (err) => {
-    if (err) {
-      console.error("Error in webhook handler:", err);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-  });
-});
+// Webhook route is now handled by stripeRoutes
 
 // Regular API routes
 app.use("/api", aiRoutes);
 app.use("/api", userRoutes);
-app.use("/api", (req, res, next) => {
-  // Skip the webhook route as it's handled separately
-  if (req.path === '/webhook' && req.method === 'POST') {
-    return next('route');
-  }
-  next();
-}, stripeRoutes);
+app.use("/api", stripeRoutes);
 app.use("/api", clerkRoutes);
 app.use("/api", companionRoutes);
 app.use("/api", messageRoutes);

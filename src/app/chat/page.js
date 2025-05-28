@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FaPaperPlane } from "react-icons/fa";
 import { apiPost, apiGet } from "@/services/api";
 import NavigationBar from "../components/NavigationBar";
 
 function Chat() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const name = searchParams.get("name");
   const personality = searchParams.get("personality");
@@ -87,6 +88,8 @@ function Chat() {
         minute: "2-digit",
       }),
       sender: "user",
+      read: false, // User messages start as unread until AI responds
+      delivered: true, // User messages are always delivered
     };
 
     setMessages((prevMessages) => [...prevMessages, newMessage]);
@@ -123,9 +126,20 @@ function Chat() {
             minute: "2-digit",
           }),
           sender: "bot",
+          read: true, // Bot messages are automatically read when received
+          delivered: true,
         };
 
-        setMessages((prevMessages) => [...prevMessages, botMessage]);
+        setMessages((prevMessages) => {
+          // Mark the last user message as read when AI responds
+          const updatedMessages = prevMessages.map((msg, index) => {
+            if (index === prevMessages.length - 1 && msg.sender === "user") {
+              return { ...msg, read: true };
+            }
+            return msg;
+          });
+          return [...updatedMessages, botMessage];
+        });
 
         // Small pause between messages if there are multiple responses
         if (i < data.llm_ans.length - 1) {
@@ -241,42 +255,76 @@ function Chat() {
     <>
       <div className="min-h-screen">
         <div className="flex flex-col h-screen">
-          <NavigationBar
-            type="breadcrumbs"
-            breadcrumbs={[
-              { label: "Matches", url: "/home" },
-              { label: name, url: "" }
-            ]}
-            params={{ user_id: userId, email: email }}
-          />
-          <div className="bg-black p-2 flex items-center border-b border-gray-800">
+          {/* Header with back button, profile, and status */}
+          <div className="bg-black p-4 flex items-center border-b border-gray-800">
+            <button
+              onClick={() => router.back()}
+              className="mr-3 text-white hover:text-gray-300 transition-colors"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
             <img
               src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080'}${image}`}
               alt="User profile"
-              className="w-12 h-12 rounded-full mr-4"
+              className="w-10 h-10 rounded-full mr-3"
             />
-            <div>
-              <div className="text-white font-bold text-lg">{name}</div>
-              <div className="text-green-500 text-sm">Online</div>
+            <div className="flex-1">
+              <div className="text-white font-semibold text-lg">{name}</div>
+              <div className="text-green-500 text-sm flex items-center">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                Online
+              </div>
             </div>
           </div>
 
           {/* Chat Messages */}
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 bg-black">
+            {/* Date Separator */}
+            <div className="flex items-center justify-center mb-6 mt-4">
+              <hr className="flex-grow border-gray-600" />
+              <span className="mx-4 text-gray-400 text-sm font-medium">Today</span>
+              <hr className="flex-grow border-gray-600" />
+            </div>
+
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${message.sender === "user" ? "justify-end" : ""
-                  } mb-4`}
+                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"
+                  } mb-3`}
               >
-                <div
-                  className={`${message.sender === "user" ? "bg-pink-500" : "bg-gray-800"
-                    } text-white p-3 rounded-lg max-w-xs`}
-                >
-                  {message.text}
-                </div>
-                <div className="text-gray-500 text-xs ml-2 self-end">
-                  {message.time}
+                <div className={`flex flex-col ${message.sender === "user" ? "items-end" : "items-start"} max-w-xs`}>
+                  <div
+                    className={`${
+                      message.sender === "user"
+                        ? "bg-pink-500 rounded-t-2xl rounded-bl-2xl rounded-br-md"
+                        : "bg-gray-700 rounded-t-2xl rounded-br-2xl rounded-bl-md"
+                    } text-white p-3 shadow-sm relative`}
+                  >
+                    {message.text}
+                  </div>
+
+                  {/* Time and Read Status */}
+                  <div className={`flex items-center mt-1 px-1 ${message.sender === "user" ? "flex-row" : "flex-row"}`}>
+                    <span className="text-gray-400 text-xs">
+                      {message.time}
+                    </span>
+
+                    {/* Read marks for user messages */}
+                    {message.sender === "user" && (
+                      <div className="ml-2 flex items-center">
+                        {message.delivered && (
+                          <svg width="16" height="12" viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M1 6L5 10L15 1" stroke={message.read ? "#10B981" : "#6B7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            {message.read && (
+                              <path d="M4 6L8 10L18 1" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            )}
+                          </svg>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -284,7 +332,7 @@ function Chat() {
             {/* Enhanced Typing Indicator for message composition */}
             {isTyping && (
               <div className="flex justify-start items-center mb-4">
-                <div className="bg-gray-800 text-white p-3 rounded-lg max-w-xs flex items-center">
+                <div className="bg-gray-700 text-white p-3 rounded-t-2xl rounded-br-2xl rounded-bl-md max-w-xs flex items-center shadow-sm">
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></div>
                     <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse delay-150"></div>
@@ -298,28 +346,24 @@ function Chat() {
             )}
           </div>
 
-
-
           {/* Input Field */}
-          <div className="bg-black p-4 flex items-center sticky bottom-14 mt-9">
+          <div className="bg-black p-4 flex items-center border-t border-gray-800">
             <input
               type="text"
-              placeholder="Your message"
-              className="flex-grow bg-gray-800 text-white p-3 rounded-lg mr-4"
+              placeholder="Type a message..."
+              className="flex-grow bg-gray-800 text-white p-3 rounded-full mr-3 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
             />
 
-
-
             {/* Send Button */}
             <button
-              className="text-green-500 text-2xl mr-2"
+              className="bg-pink-500 hover:bg-pink-600 text-white p-3 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleSendMessage}
               disabled={input.trim() === ""}
             >
-              <FaPaperPlane />
+              <FaPaperPlane className="text-sm" />
             </button>
           </div>
         </div>

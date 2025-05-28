@@ -1,29 +1,34 @@
 # Pink Honey Backend
 
-Express.js backend for the Pink Honey AI Companion App, providing a robust API for AI-powered voice and text conversations.
+Express.js backend for the Pink Honey AI Companion App, providing a robust API for AI-powered voice and text conversations with advanced memory and personality systems.
 
 ## Overview
 
-This backend provides API endpoints for the Pink Honey frontend, handling:
+This backend provides comprehensive API endpoints for the Pink Honey frontend, handling:
 
-- AI conversation responses with OpenAI integration
-- User management and authentication with Clerk
-- Stripe payment processing and subscription management
-- Real-time voice call integration with Socket.IO
-- Speech-to-text and text-to-speech processing
+- **AI Conversation Responses** - OpenAI GPT-4o integration with memory-enhanced conversations
+- **User Management** - Clerk authentication with MongoDB user synchronization
+- **Payment Processing** - Stripe integration with subscription management
+- **Voice Processing** - Speech-to-text and text-to-speech using OpenAI Whisper and TTS
+- **Memory System** - Long-term and short-term conversation memory for personalized interactions
+- **First Message Generation** - Automatic personalized first messages when users match
+- **Companion Management** - AI companion profiles with structured personality traits
+- **Message Management** - Inbox system with unread tracking and message previews
 
 ## Tech Stack
 
-- **Node.js** - JavaScript runtime environment
-- **Express.js** - Web application framework
-- **MongoDB** - NoSQL database for data storage
-- **Mongoose** - MongoDB object modeling for Node.js
-- **Socket.IO** - Real-time bidirectional communication
-- **OpenAI API** - AI conversation generation and speech processing
+- **Node.js 18+** - JavaScript runtime environment
+- **Express.js** - Web application framework with comprehensive middleware
+- **MongoDB** - NoSQL database for data storage with Mongoose ODM
+- **OpenAI API** - GPT-4o for conversations, Whisper for STT, TTS for voice synthesis
 - **Stripe API** - Payment processing and subscription management
-- **Clerk** - Authentication and user management
-- **Joi** - Request validation
-- **Helmet** - Security middleware
+- **Clerk Backend** - Authentication and user management
+- **Joi** - Request validation and schema validation
+- **Helmet** - Security middleware for HTTP headers
+- **Express Rate Limit** - API rate limiting and abuse prevention
+- **Winston** - Structured logging framework
+- **Multer** - File upload handling for voice processing
+- **Firebase Admin** - Additional cloud services integration
 
 ## Architecture
 
@@ -31,26 +36,67 @@ The backend follows a modular architecture with clear separation of concerns:
 
 ```
 backend/
-├── config/         # Configuration files
-├── controllers/    # Request handlers
-├── middleware/     # Express middleware
-├── models/         # Data models
-├── routes/         # API routes
-├── services/       # Business logic
-├── utils/          # Utility functions
-├── .env.example    # Example environment variables
-├── index.js        # Main entry point
-└── package.json    # Backend dependencies
+├── config/                 # Configuration files
+│   ├── config.js          # Application configuration
+│   └── database.js        # MongoDB connection setup
+├── controllers/           # Request handlers
+│   ├── aiController.js    # AI conversation logic
+│   ├── clerkController.js # Clerk authentication handling
+│   ├── companionController.js # Companion management
+│   ├── messageController.js # Message and inbox handling
+│   ├── stripeController.js # Payment processing
+│   └── userController.js  # User management
+├── middleware/            # Express middleware
+│   ├── cors.js           # CORS configuration
+│   ├── errorHandler.js   # Global error handling
+│   ├── logger.js         # Request logging
+│   ├── requestValidation.js # Input validation with Joi
+│   ├── securityMiddleware.js # Security headers and rate limiting
+│   └── userValidation.js # User authentication middleware
+├── models/               # MongoDB data models
+│   ├── ChatHistory.js    # Chat conversations with memory system
+│   ├── Companion.js      # AI companion profiles and personalities
+│   ├── Match.js          # User-companion matching records
+│   ├── Payment.js        # Payment transactions
+│   └── User.js           # User accounts and subscriptions
+├── routes/               # API route definitions
+│   ├── aiRoutes.js       # AI conversation endpoints
+│   ├── clerkRoutes.js    # Authentication endpoints
+│   ├── companionRoutes.js # Companion management endpoints
+│   ├── messageRoutes.js  # Message and inbox endpoints
+│   ├── stripeRoutes.js   # Payment processing endpoints
+│   └── userRoutes.js     # User management endpoints
+├── services/             # Business logic services
+│   ├── aiService.js      # AI conversation processing
+│   ├── firestoreService.js # Firebase integration
+│   ├── firstMessageService.js # First message generation
+│   ├── memoryService.js  # Conversation memory management
+│   ├── mongoService.js   # Database operations
+│   ├── speechService.js  # Voice processing (STT/TTS)
+│   └── stripeService.js  # Payment processing logic
+├── seeders/              # Database seeding scripts
+│   ├── companionSeeder.js # Individual companion seeder
+│   ├── companionSeederBulk.js # Bulk companion seeder
+│   └── clearCompanions.js # Database cleanup utility
+├── utils/                # Utility functions
+│   └── clerkUtils.js     # Clerk helper functions
+├── public/audio/         # Audio file storage
+├── temp/                 # Temporary file storage
+├── uploads/              # File upload storage
+├── Dockerfile            # Container configuration
+├── index.js              # Main application entry point
+└── package.json          # Dependencies and scripts
 ```
 
 ### Key Components
 
-- **Controllers**: Handle HTTP requests and responses
-- **Middleware**: Process requests before they reach route handlers
-- **Models**: Define data schemas for MongoDB
-- **Routes**: Define API endpoints
-- **Services**: Implement business logic and external API interactions
-- **Utils**: Provide helper functions
+- **Controllers**: Handle HTTP requests, validate input, and coordinate responses
+- **Middleware**: Process requests for security, authentication, validation, and logging
+- **Models**: Define MongoDB schemas with validation and indexing
+- **Routes**: Define API endpoints with middleware chains
+- **Services**: Implement core business logic and external API integrations
+- **Seeders**: Populate database with initial data and manage data lifecycle
+- **Utils**: Provide reusable helper functions and utilities
 
 ## Middleware System
 
@@ -118,18 +164,67 @@ npm run dev
 
 All API endpoints are protected with appropriate middleware for authentication, validation, and security.
 
-### AI Responses
+### AI Conversation Endpoints
 
 - `POST /api/get_ai_response` - Get AI response for chat messages
 
   - **Auth**: Required in production
   - **Body**: `{ message, name, personality, image, user_id }`
-  - **Response**: AI-generated text response
+  - **Response**: AI-generated text response with memory integration
 
 - `GET /api/get_chat_history` - Get chat history for a user and companion
+
   - **Auth**: Required in production
   - **Query**: `user_id, companion_name`
-  - **Response**: Array of chat messages
+  - **Response**: Array of chat messages with timestamps and metadata
+
+- `GET /api/get_user_chat_summaries` - Get user's chat summaries for inbox
+  - **Auth**: Required in production
+  - **Query**: `user_id`
+  - **Response**: Array of chat threads with previews and unread counts
+
+### Companion Management
+
+- `GET /api/companions` - Get all active AI companions
+
+  - **Auth**: Required in production
+  - **Response**: Array of companion objects with full personality details
+
+- `GET /api/companions/id/:id` - Get companion by MongoDB ID
+
+  - **Auth**: Required in production
+  - **Params**: `id` (MongoDB ObjectId)
+  - **Response**: Single companion object with personality traits
+
+- `GET /api/companions/name/:name` - Get companion by name
+  - **Auth**: Required in production
+  - **Params**: `name` (companion name, case-insensitive)
+  - **Response**: Single companion object with structured personality
+
+### Message Management
+
+- `POST /api/generate_first_message` - Generate automatic first message on match
+
+  - **Auth**: Required in production
+  - **Body**: `{ user_id, companion_name, personality, image }`
+  - **Response**: Generated personalized first message
+
+- `GET /api/get_user_inbox` - Get user's inbox with message previews
+
+  - **Auth**: Required in production
+  - **Query**: `user_id`
+  - **Response**: Inbox data with conversation previews and unread counts
+
+- `POST /api/mark_as_read` - Mark messages as read
+
+  - **Auth**: Required in production
+  - **Body**: `{ user_id, companion_name }`
+  - **Response**: Updated read status
+
+- `GET /api/check_first_message_needed` - Check if first message generation is needed
+  - **Auth**: Required in production
+  - **Query**: `user_id, companion_name`
+  - **Response**: Boolean indicating if first message is needed
 
 ### User Management
 
@@ -150,13 +245,44 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Body**: `{ email, amount }`
   - **Response**: Updated token count
 
-### Payments
+### Voice Processing
 
-- `GET /api/create_checkout_session` - Create Stripe checkout session
+- `POST /api/voice/speech-to-text` - Convert speech to text
+
+  - **Auth**: Required in production
+  - **Body**: Audio file (multipart/form-data)
+  - **Response**: Transcribed text using OpenAI Whisper
+
+- `POST /api/voice/text-to-speech` - Convert text to speech
+
+  - **Auth**: Required in production
+  - **Body**: `{ text, voice_id }`
+  - **Response**: Audio file or audio URL using OpenAI TTS
+
+- `POST /api/voice/process` - Process voice input and get AI response
+  - **Auth**: Required in production
+  - **Body**: Audio file with companion context
+  - **Response**: AI response as audio
+
+### Payment Processing
+
+- `POST /api/create_checkout_session` - Create Stripe checkout session
 
   - **Auth**: None (public endpoint)
-  - **Query**: `{ priceId?, email?, plan?, success_url?, cancel_url? }`
+  - **Body**: `{ user_id, email?, selected_plan?, tokens?, price?, product_name? }`
   - **Response**: Stripe checkout session URL
+
+- `GET /api/check_payment_status/:sessionId` - Check payment status
+
+  - **Auth**: None (public endpoint)
+  - **Params**: `sessionId` (Stripe session ID)
+  - **Response**: Payment status and details
+
+- `POST /api/direct_stripe_check` - Direct Stripe payment verification
+
+  - **Auth**: None (public endpoint)
+  - **Body**: `{ session_id }`
+  - **Response**: Direct Stripe session status
 
 - `POST /api/webhook` - Handle Stripe webhook events
   - **Auth**: Stripe signature verification
@@ -169,8 +295,6 @@ All API endpoints are protected with appropriate middleware for authentication, 
   - **Auth**: Clerk signature verification
   - **Body**: Raw Clerk webhook event
   - **Response**: Acknowledgment
-
-
 
 ### System
 
@@ -250,100 +374,207 @@ Helmet middleware is used to set secure HTTP headers:
 - **Error Handling**: Prevents leaking sensitive information in errors
 - **Environment-based Security**: Stricter security in production
 
+## Core Services
+
+The backend implements several specialized services for different aspects of the application:
+
+### AI Service (`aiService.js`)
+- **Conversation Processing**: Handles AI response generation using OpenAI GPT-4o
+- **Memory Integration**: Incorporates conversation history and personality traits
+- **Context Management**: Maintains conversation context across interactions
+- **Response Optimization**: Ensures consistent and personality-appropriate responses
+
+### Memory Service (`memoryService.js`)
+- **Long-term Memory**: Stores relationship milestones and user preferences
+- **Short-term Memory**: Maintains recent conversation context
+- **Memory Processing**: Updates and retrieves conversation memory
+- **Relationship Tracking**: Monitors emotional history and interaction patterns
+
+### First Message Service (`firstMessageService.js`)
+- **Automatic Generation**: Creates personalized first messages when users match
+- **Personality-based**: Uses companion personality traits for message customization
+- **Template System**: Utilizes predefined templates with dynamic content
+- **Context Awareness**: Considers user profile and companion characteristics
+
+### Speech Service (`speechService.js`)
+- **Speech-to-Text**: Converts audio input to text using OpenAI Whisper
+- **Text-to-Speech**: Generates natural voice responses using OpenAI TTS
+- **Audio Processing**: Handles file upload, conversion, and temporary storage
+- **Voice Customization**: Supports different voice profiles for companions
+
+### Stripe Service (`stripeService.js`)
+- **Payment Processing**: Handles subscription payments and one-time purchases
+- **Webhook Management**: Processes Stripe webhook events for payment updates
+- **Customer Management**: Creates and manages Stripe customer records
+- **Subscription Lifecycle**: Manages subscription creation, updates, and cancellations
+
+### MongoDB Service (`mongoService.js`)
+- **Database Operations**: Centralized database interaction layer
+- **User Management**: User creation, updates, and retrieval
+- **Chat Management**: Message storage, retrieval, and conversation tracking
+- **Match Management**: User-companion matching and relationship tracking
+
 ## MongoDB Integration
 
-Pink Honey uses MongoDB for data storage with the following collections:
+Pink Honey uses MongoDB for comprehensive data storage with the following collections:
 
-- **users**: Stores user information, including authentication details and subscription status
-- **chat_history**: Stores conversation history between users and AI companions
-- **companions**: Stores AI companion profiles and personalities
-- **payments**: Stores payment records and subscription details
+### Collections Overview
+- **users**: User accounts, authentication, and subscription data
+- **chathistory**: Conversation messages with advanced memory system
+- **companions**: AI companion profiles with structured personalities
+- **matches**: User-companion matching records and interaction history
+- **payments**: Payment transactions and subscription management
 
-The application uses Mongoose for object modeling and database interactions. When users sign up with Clerk authentication, corresponding user entries are automatically created in MongoDB.
+### Advanced Features
+- **Memory System**: Long-term and short-term conversation memory
+- **Personality Traits**: Structured personality data for consistent AI behavior
+- **Relationship Tracking**: Emotional history and milestone tracking
+- **Unread Management**: Message read status and notification system
+- **Auto-indexing**: Optimized database queries with compound indexes
 
 ### Database Seeding
 
-The application includes automatic database seeding that runs when the server starts:
+The application includes an intelligent auto-seeding system:
 
-#### Auto-Seeding on Server Start
-
-When you start the backend server, it automatically checks if AI companions exist in the database and seeds them if needed:
-
-```bash
-npm run dev  # Companions are automatically seeded if database is empty
-```
-
-**Auto-Seeding Features:**
-- **Automatic**: Runs every time the server starts
+#### Auto-Seeding Features
+- **Automatic Execution**: Runs every time the server starts
+- **Smart Detection**: Only seeds if fewer than 10 companions exist
 - **Idempotent**: Safe to run multiple times without creating duplicates
 - **Non-blocking**: Server continues to start even if seeding fails
-- **Smart Detection**: Only seeds if fewer than 10 companions exist
+- **Diverse Characters**: Creates 10 unique AI companions with different personalities
 
-#### Manual Seeding (Optional)
+#### Companion Characters
+The seeder creates companions with varied personality archetypes:
+1. **Luna** (25) - Creative artist and poet
+2. **Marcus** (32) - Tech enthusiast and problem solver
+3. **Sophia** (28) - Wellness coach and mindfulness expert
+4. **Kai** (24) - Adventurous traveler and outdoor enthusiast
+5. **Elena** (30) - Intellectual conversationalist
+6. **Zara** (26) - Fashion expert and confidence coach
+7. **Oliver** (35) - Business mentor and entrepreneur
+8. **Maya** (23) - Musical creative performer
+9. **Alex** (29) - Fitness coach and sports enthusiast
+10. **Iris** (27) - Emotional support specialist
 
-You can also run the companion seeder manually:
+#### Manual Seeding Options
 
 ```bash
+# Auto-seeding (runs on server start)
+npm run dev
+
+# Manual companion seeding
 node seeders/companionSeeder.js
-```
 
-**Manual Seeding Features:**
-- **Idempotent**: Safe to run multiple times without creating duplicates
-- **Diverse Characters**: 10 unique AI companions with different personality archetypes
-- **Complete Data**: All required and optional fields populated with realistic values
-- **Error Handling**: Comprehensive error handling with helpful guidance
+# Bulk companion seeding
+node seeders/companionSeederBulk.js
 
-**Characters Created:**
-1. Luna (25) - Creative artist and poet
-2. Marcus (32) - Tech enthusiast and problem solver
-3. Sophia (28) - Wellness coach and mindfulness expert
-4. Kai (24) - Adventurous traveler and outdoor enthusiast
-5. Elena (30) - Intellectual conversationalist with cultural expertise
-6. Zara (26) - Fashion expert and confidence coach
-7. Oliver (35) - Business mentor and entrepreneur
-8. Maya (23) - Musical creative performer
-9. Alex (29) - Fitness coach and sports enthusiast
-10. Iris (27) - Emotional support specialist
-
-#### Legacy Seeder
-
-The original seeder script creates both users and companions:
-
-```bash
+# Legacy seeder (users and companions)
 npm run seed
 ```
 
-For more details about database seeding, see the [seeders documentation](./seeders/README.md).
-
 ## Stripe Integration
 
-The application uses Stripe for payment processing with the following features:
+The application uses Stripe for comprehensive payment processing:
 
-- Secure checkout sessions for subscription payments
-- Webhook handling for payment events
-- Billing address collection for compliance with Indian regulations
-- Automatic subscription management
+### Features
+- **Secure Checkout**: Hosted checkout sessions for subscriptions and one-time payments
+- **Webhook Processing**: Real-time payment event handling with signature verification
+- **Customer Management**: Automatic customer record creation and management
+- **Payment Verification**: Multiple verification methods for payment reliability
+- **Subscription Management**: Automated subscription lifecycle management
+- **Address Collection**: Compliance with international billing regulations
+
+### Subscription Plans
+- **Monthly**: $19.99/month - Full access to all features
+- **Yearly**: $99.99/year - Annual subscription with savings
+- **Lifetime**: $99.99 one-time - Permanent access to all features
+
+### Payment Security
+- **Webhook Verification**: Stripe signature validation for all webhook events
+- **Duplicate Prevention**: Protection against duplicate payment processing
+- **Status Tracking**: Real-time payment status monitoring and updates
+- **Error Handling**: Comprehensive error handling for payment failures
+
+## Development Features
+
+### Auto-Restart and Hot Reload
+- **Nodemon**: Automatic server restart on file changes during development
+- **Environment Detection**: Different configurations for development and production
+- **Error Recovery**: Graceful error handling that doesn't crash the server
+
+### Logging and Monitoring
+- **Winston Logging**: Structured logging with different levels (error, warn, info, debug)
+- **Request Logging**: Morgan middleware for HTTP request logging
+- **Error Tracking**: Comprehensive error logging with stack traces in development
+
+### Testing and Debugging
+- **Postman Collection**: Pre-configured API testing collection
+- **Health Check**: Server status endpoint for monitoring
+- **Environment Variables**: Flexible configuration for different environments
 
 ## API Testing with Postman
 
-A Postman collection is included in the repository for testing the API endpoints. To use it:
+A comprehensive Postman collection is included for testing all API endpoints:
 
+### Setup Instructions
 1. Import the `Pink_Honey_API.postman_collection.json` file into Postman
-2. Set up an environment with the `baseUrl` variable pointing to your backend server (default: `http://localhost:8080`)
-3. Use the collection to test the various API endpoints
+2. Set up an environment with the following variables:
+   - `baseUrl`: Your backend server URL (default: `http://localhost:8080`)
+   - `clerkId`: A valid Clerk user ID for testing authenticated endpoints
+   - `email`: A valid user email for testing
+3. Use the collection to test all API endpoints with proper authentication
 
-## Docker
+### Available Test Collections
+- **User Management**: User creation, authentication, and subscription management
+- **Companion Management**: Companion retrieval and profile management
+- **AI Conversations**: Chat history, AI responses, and memory system
+- **Message Management**: First messages, inbox, and read status
+- **Voice Processing**: Speech-to-text and text-to-speech endpoints
+- **Payment Processing**: Stripe integration and webhook testing
 
-To build and run the Docker container:
+## Docker Support
 
+The backend includes Docker support for containerized deployment:
+
+### Building and Running
 ```bash
 # Build the Docker image
 docker build -t pinkhoney-backend .
 
-# Run the container
+# Run the container with environment file
 docker run -p 8080:8080 --env-file .env pinkhoney-backend
+
+# Run with individual environment variables
+docker run -p 8080:8080 \
+  -e MONGODB_URI=your_mongodb_uri \
+  -e OPENAI_API_KEY=your_openai_key \
+  -e STRIPE_SECRET_KEY=your_stripe_key \
+  pinkhoney-backend
 ```
+
+### Docker Features
+- **Multi-stage Build**: Optimized image size with production dependencies only
+- **Health Checks**: Built-in health check endpoint for container monitoring
+- **Environment Configuration**: Flexible environment variable configuration
+- **Port Exposure**: Configurable port mapping (default: 8080)
+
+## Performance and Scalability
+
+### Optimization Features
+- **Database Indexing**: Optimized MongoDB queries with compound indexes
+- **Memory Management**: Efficient conversation memory storage and retrieval
+- **Rate Limiting**: API rate limiting to prevent abuse and ensure fair usage
+- **Caching**: Strategic caching of frequently accessed data
+- **Connection Pooling**: MongoDB connection pooling for better performance
+
+### Monitoring and Metrics
+- **Health Endpoints**: Server health and status monitoring
+- **Error Tracking**: Comprehensive error logging and tracking
+- **Performance Logging**: Request timing and performance metrics
+- **Resource Monitoring**: Memory and CPU usage tracking
 
 ## License
 
-[MIT](LICENSE)
+All rights reserved. This project is proprietary and confidential.
+
+© 2024 Pink Honey
