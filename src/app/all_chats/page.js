@@ -184,7 +184,7 @@ function Chat() {
                   </div>
                   <div className="ml-3 flex-1">
                     <div className="font-bold text-white">{message.name}</div>
-                    <div className="text-sm text-gray-400 truncate max-w-xs">
+                    <div className="text-sm text-gray-400 truncate max-w-[12rem]">
                       {message.status}
                     </div>
                   </div>

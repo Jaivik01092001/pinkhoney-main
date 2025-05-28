@@ -53,9 +53,9 @@ const createCheckoutSession = async ({ userId, email, plan }) => {
       priceId = config.stripe.priceIds.monthly;
     }
 
-    // Determine mode: 'payment' for lifetime (one-time), 'subscription' otherwise
-    const isSubscription = plan === "monthly" || plan === "yearly";
-    const mode = isSubscription ? "subscription" : "payment";
+    // Use 'payment' mode for all plans since your Stripe prices are configured for one-time payments
+    // If you want true subscriptions, you need to create recurring price IDs in Stripe
+    const mode = "payment";
 
     // Build session payload
     const sessionPayload = {
@@ -80,22 +80,21 @@ const createCheckoutSession = async ({ userId, email, plan }) => {
       client_reference_id: userId
     };
 
-    // ✅ Only add customer_creation for one-time (payment) mode
-    if (mode === "payment") {
-      sessionPayload.customer_creation = "always";
-    }
+    // Add customer_creation for payment mode
+    sessionPayload.customer_creation = "always";
 
     // Create checkout session
     const session = await stripeClient.checkout.sessions.create(sessionPayload);
 
-    // Get the actual amount from the session
-    const amount = session.amount_total || getPlanAmount(plan);
+    // Get the actual amount from the session (convert from cents to dollars)
+    const amountInCents = session.amount_total || getPlanAmount(plan);
+    const amountInDollars = amountInCents / 100;
 
     // Save payment record with correct amounts
     await createPayment({
       user_id: userId,
       email,
-      amount: amount, // Use the actual amount from the session or plan
+      amount: amountInDollars, // Store amount in dollars, not cents
       currency: "usd",
       status: "pending",
       stripeSessionId: session.id,
@@ -104,11 +103,91 @@ const createCheckoutSession = async ({ userId, email, plan }) => {
 
     // Log the session details for debugging
     console.log("Created checkout session with ID:", session.id);
-    console.log(`Payment record created with amount: ${amount} cents (${(amount / 100).toFixed(2)} USD)`);
+    console.log(`Payment record created with amount: ${amountInCents} cents (${amountInDollars.toFixed(2)} USD)`);
 
     return session;
   } catch (error) {
     console.error("Error creating checkout session:", error);
+    throw error;
+  }
+};
+
+/**
+ * Create a checkout session for token purchase
+ * @param {Object} options - Checkout options
+ * @param {string} options.userId - User ID
+ * @param {string} options.email - User email
+ * @param {number} options.tokens - Number of tokens to purchase
+ * @param {number} options.price - Price in USD
+ * @param {string} options.productName - Product name for display
+ * @returns {Promise<Object>} Stripe checkout session
+ */
+const createTokenCheckoutSession = async ({ userId, email, tokens, price, productName }) => {
+  try {
+    // Convert price to cents for Stripe
+    const priceInCents = Math.round(price * 100);
+
+    // Create a dynamic price for this token purchase
+    const stripePrice = await stripeClient.prices.create({
+      unit_amount: priceInCents,
+      currency: 'usd',
+      product_data: {
+        name: productName,
+        description: `Purchase ${tokens} tokens for your account`,
+      },
+    });
+
+    // Build session payload for token purchase
+    const sessionPayload = {
+      line_items: [
+        {
+          price: stripePrice.id,
+          quantity: 1,
+        },
+      ],
+      mode: 'payment', // One-time payment for tokens
+      success_url: `${config.server.frontendUrl}/token-success?user_id=${userId}&tokens=${tokens}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${config.server.frontendUrl}/tokens?user_id=${userId}&email=${encodeURIComponent(email)}`,
+      customer_email: email,
+      billing_address_collection: "required",
+      payment_method_types: ["card"],
+      customer_creation: "always",
+      // Add metadata to help with webhook processing
+      metadata: {
+        user_id: userId,
+        email: email,
+        tokens: tokens.toString(),
+        purchase_type: 'tokens'
+      },
+      // Add client reference ID for additional user identification
+      client_reference_id: userId
+    };
+
+    // Create checkout session
+    const session = await stripeClient.checkout.sessions.create(sessionPayload);
+
+    // Save payment record for token purchase
+    await createPayment({
+      user_id: userId,
+      email,
+      amount: price, // Store amount in dollars, not cents
+      currency: "usd",
+      status: "pending",
+      stripeSessionId: session.id,
+      subscriptionPlan: "tokens", // Use "tokens" to distinguish from subscription plans
+      metadata: {
+        tokens: tokens,
+        purchase_type: 'tokens'
+      }
+    });
+
+    // Log the session details for debugging
+    console.log("Created token checkout session with ID:", session.id);
+    console.log(`Token purchase record created: ${tokens} tokens for ${price.toFixed(2)} USD`);
+
+    return session;
+  } catch (error) {
+    console.error("Error creating token checkout session:", error);
     throw error;
   }
 };
@@ -274,30 +353,84 @@ const handleWebhookEvent = async (payload, signature) => {
         console.log("Payment record updated:", payment ? "success" : "not found");
 
         if (payment) {
-          // Update user subscription status
-          const user = await getUserById(payment.user_id);
-          if (user) {
-            const subscriptionData = {
-              subscribed: "yes",
-              subscription: {
-                plan: payment.subscriptionPlan,
-                startDate: new Date(),
-                endDate:
-                  payment.subscriptionPlan === "lifetime"
-                    ? null
-                    : payment.subscriptionPlan === "yearly"
-                      ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-                      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                status: "active",
-                stripeCustomerId: session.customer,
-                stripeSubscriptionId: session.subscription,
-              },
-            };
+          // Check if this is a token purchase or subscription
+          const isTokenPurchase = payment.subscriptionPlan === "tokens" ||
+                                 (session.metadata && session.metadata.purchase_type === 'tokens');
 
-            await updateUser(user.user_id, subscriptionData);
-            console.log("User subscription updated for user:", user.user_id);
+          if (isTokenPurchase) {
+            // Handle token purchase - update user's token balance
+            console.log("Processing token purchase for user:", payment.user_id);
+
+            const user = await getUserById(payment.user_id);
+            if (user) {
+              // Get token amount from metadata or payment record
+              const tokensToAdd = session.metadata?.tokens || payment.metadata?.tokens;
+
+              if (tokensToAdd) {
+                try {
+                  // Call the increase_tokens endpoint to update user's balance
+                  const { increaseTokens } = require("../controllers/userController");
+
+                  // Create a mock request/response for the controller
+                  const mockReq = {
+                    body: {
+                      user_id: payment.user_id,
+                      tokens_to_increase: parseInt(tokensToAdd)
+                    }
+                  };
+
+                  const mockRes = {
+                    status: (code) => ({
+                      json: (data) => {
+                        console.log(`Token update response (${code}):`, data);
+                        return data;
+                      }
+                    })
+                  };
+
+                  // Call the increase tokens function directly
+                  await increaseTokens(mockReq, mockRes, (error) => {
+                    if (error) {
+                      console.error("Error in increaseTokens:", error);
+                    }
+                  });
+
+                  console.log(`Successfully added ${tokensToAdd} tokens to user ${payment.user_id}`);
+                } catch (tokenError) {
+                  console.error("Error updating user tokens:", tokenError);
+                }
+              } else {
+                console.error("No token amount found in payment metadata");
+              }
+            } else {
+              console.log("User not found for token purchase:", payment.user_id);
+            }
           } else {
-            console.log("User not found for payment:", payment.user_id);
+            // Handle plan purchase - update user subscription status (all plans are now one-time payments)
+            const user = await getUserById(payment.user_id);
+            if (user) {
+              const subscriptionData = {
+                subscribed: "yes",
+                subscription: {
+                  plan: payment.subscriptionPlan,
+                  startDate: new Date(),
+                  endDate:
+                    payment.subscriptionPlan === "lifetime"
+                      ? null
+                      : payment.subscriptionPlan === "yearly"
+                        ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  status: "active",
+                  stripeCustomerId: session.customer,
+                  // No stripeSubscriptionId since these are one-time payments, not recurring subscriptions
+                },
+              };
+
+              await updateUser(user.user_id, subscriptionData);
+              console.log("User plan updated for user:", user.user_id);
+            } else {
+              console.log("User not found for payment:", payment.user_id);
+            }
           }
         } else {
           console.log("Payment record not found for session ID:", session.id);
@@ -339,5 +472,6 @@ const handleWebhookEvent = async (payload, signature) => {
 
 module.exports = {
   createCheckoutSession,
+  createTokenCheckoutSession,
   handleWebhookEvent,
 };

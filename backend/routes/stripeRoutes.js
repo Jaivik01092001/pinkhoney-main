@@ -168,15 +168,17 @@ const verifyStripeWebhook = (req, res, next) => {
 };
 
 /**
- * @route   GET /api/create_checkout_session
- * @desc    Create a checkout session for subscription
+ * @route   POST /api/create_checkout_session
+ * @desc    Create a checkout session for subscription or token purchase
  * @access  Public
  */
-router.get(
+router.post(
   "/create_checkout_session",
   validateCheckoutSession,
   createCheckoutSessionHandler
 );
+
+
 
 /**
  * @route   GET /api/check_payment_status/:sessionId

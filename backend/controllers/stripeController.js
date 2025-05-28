@@ -3,18 +3,19 @@
  */
 const {
   createCheckoutSession,
+  createTokenCheckoutSession,
   handleWebhookEvent,
 } = require("../services/stripeService");
 
 /**
- * Create a checkout session for subscription
+ * Create a checkout session for subscription or token purchase
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
 const createCheckoutSessionHandler = async (req, res, next) => {
   try {
-    const { user_id, selected_plan, email } = req.query;
+    const { user_id, selected_plan, email, tokens, price, product_name } = req.body;
 
     if (!user_id) {
       return res.status(400).json({
@@ -23,24 +24,55 @@ const createCheckoutSessionHandler = async (req, res, next) => {
       });
     }
 
-    // Create checkout session with required information
-    const session = await createCheckoutSession({
-      userId: user_id,
-      email: email || "",
-      plan: selected_plan || "monthly",
-    });
+    // Check if this is a token purchase (has tokens and price parameters)
+    const isTokenPurchase = tokens && price;
 
-    // Return the session URL as JSON for the frontend to handle
-    res.status(200).json({
-      success: true,
-      url: session.url,
-      sessionId: session.id
-    });
+    if (isTokenPurchase) {
+      // Handle token purchase
+      if (!tokens || !price) {
+        return res.status(400).json({
+          success: false,
+          error: "Tokens and price are required for token purchase",
+        });
+      }
+
+      // Create token checkout session
+      const session = await createTokenCheckoutSession({
+        userId: user_id,
+        email: email || "",
+        tokens: parseInt(tokens),
+        price: parseFloat(price),
+        productName: product_name || `${tokens} Tokens`,
+      });
+
+      // Return the session URL as JSON for the frontend to handle
+      res.status(200).json({
+        success: true,
+        url: session.url,
+        sessionId: session.id
+      });
+    } else {
+      // Handle subscription purchase
+      const session = await createCheckoutSession({
+        userId: user_id,
+        email: email || "",
+        plan: selected_plan || "monthly",
+      });
+
+      // Return the session URL as JSON for the frontend to handle
+      res.status(200).json({
+        success: true,
+        url: session.url,
+        sessionId: session.id
+      });
+    }
   } catch (error) {
     console.error("Error creating checkout session:", error);
     next(error);
   }
 };
+
+
 
 /**
  * Handle webhook events from Stripe
@@ -230,10 +262,14 @@ const webhookHandler = async (req, res, next) => {
             const email = metadata.email || session.customer_email || session.customer_details?.email;
 
             if (user_id && email) {
+              // Convert amount from cents to dollars
+              const amountInCents = session.amount_total || 1000;
+              const amountInDollars = amountInCents / 100;
+
               const newPayment = await createPayment({
                 user_id,
                 email,
-                amount: session.amount_total || 1000,
+                amount: amountInDollars, // Store amount in dollars, not cents
                 currency: session.currency || "usd",
                 status: "completed",
                 stripeSessionId: session.id,

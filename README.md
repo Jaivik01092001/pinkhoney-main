@@ -344,10 +344,10 @@ All API endpoints are protected with appropriate middleware for authentication, 
 
 ### Payments
 
-- `GET /api/create_checkout_session` - Create Stripe checkout session
+- `POST /api/create_checkout_session` - Create Stripe checkout session
 
   - **Auth**: None (public endpoint)
-  - **Query**: `{ priceId?, email?, plan?, success_url?, cancel_url? }`
+  - **Body**: `{ user_id, email?, selected_plan?, tokens?, price?, product_name? }`
   - **Response**: Stripe checkout session URL
 
 - `GET /api/check_payment_status/:sessionId` - Check payment status

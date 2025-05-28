@@ -89,12 +89,20 @@ const voiceSchemas = {
 // Stripe-related validation schemas
 const stripeSchemas = {
   createCheckoutSession: Joi.object({
+    user_id: Joi.string().required(),
     priceId: Joi.string().optional(),
     email: Joi.string().email().optional(),
     plan: Joi.string().valid("monthly", "yearly", "lifetime").optional(),
+    selected_plan: Joi.string().valid("monthly", "yearly", "lifetime").optional(),
     success_url: Joi.string().uri().optional(),
     cancel_url: Joi.string().uri().optional(),
+    // Token purchase parameters
+    tokens: Joi.number().integer().min(1).optional(),
+    price: Joi.number().min(0.01).optional(),
+    product_name: Joi.string().optional(),
   }).unknown(true),
+
+
 };
 
 // Export validation middleware functions
@@ -109,5 +117,5 @@ module.exports = {
   validateInitiateCall: validate(voiceSchemas.initiateCall),
   validateEndCall: validate(voiceSchemas.endCall),
 
-  validateCheckoutSession: validate(stripeSchemas.createCheckoutSession, "query"),
+  validateCheckoutSession: validate(stripeSchemas.createCheckoutSession, "body"),
 };
