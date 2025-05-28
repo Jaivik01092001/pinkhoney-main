@@ -36,7 +36,6 @@ const generateFirstMessage = async (companionName, userId) => {
     const primaryTrait = personalityTraits.primary || personality;
     const emotionalStyle = personalityTraits.emotionalStyle || 'supportive';
     const communicationStyle = personalityTraits.communicationStyle || 'casual';
-    const interests = companion.interests || [];
 
     // Create a specialized prompt for first messages
     const prompt = `
@@ -49,29 +48,27 @@ const generateFirstMessage = async (companionName, userId) => {
       - Personality: ${primaryTrait}
       - Emotional style: ${emotionalStyle}
       - Communication style: ${communicationStyle}
-      - Your interests: ${interests.join(', ')}
 
       PERSONALITY GUIDELINES:
       ${getPersonalityGuidelines(primaryTrait, emotionalStyle, communicationStyle)}
 
       FIRST MESSAGE RULES:
       1. Keep it short and engaging (1-2 sentences max)
-      2. Reference one of YOUR specific interests naturally
-      3. Show genuine interest in getting to know them
-      4. Be warm and welcoming but not overwhelming
-      5. Match your personality type perfectly
-      6. Ask an open-ended question related to your interests or personality
-      7. Avoid generic "hi" or "hello" - be more creative
-      8. Don't mention that you're an AI or that this is a dating app
-      9. Make it feel natural and spontaneous
-      10. Use your bio and interests to create authentic connection
+      2. Show genuine interest in getting to know them
+      3. Be warm and welcoming but not overwhelming
+      4. Match your personality type perfectly
+      5. Ask an open-ended question that reflects your personality
+      6. Avoid generic "hi" or "hello" - be more creative
+      7. Don't mention that you're an AI or that this is a dating app
+      8. Make it feel natural and spontaneous
+      9. Use your bio and personality to create authentic connection
 
-      EXAMPLES by personality type (using specific interests):
-      - Caregiver and lover (like you): "Hey! 😊 I was just thinking about trying this new restaurant I heard about - I love discovering hidden gems! What's the best meal you've had recently?"
-      - Playful and Flirty: "Well hello there, gorgeous 😏 I just got back from an amazing hike and I'm still buzzing with energy. What's the most adventurous thing you've done lately?"
-      - Shy and Loyal: "Hi... I'm a bit nervous but I saw we might have some things in common. I love quiet nature walks - what's your favorite way to unwind?"
+      EXAMPLES by personality type:
+      - Caregiver and lover: "Hey! 😊 Your profile made me smile - you seem like such a genuine person. What's been the highlight of your day?"
+      - Playful and Flirty: "Well hello there, gorgeous 😏 I couldn't resist saying hi. What's the most interesting thing about you that I should know?"
+      - Shy and Loyal: "Hi... I'm a bit nervous but I wanted to reach out. You seem really nice! What's something that makes you happy?"
 
-      Generate ONE perfect first message as ${companionName} that authentically reflects your personality and interests:
+      Generate ONE perfect first message as ${companionName} that authentically reflects your personality:
     `;
 
     // Call OpenAI API for first message generation
@@ -121,28 +118,11 @@ const getPersonalityGuidelines = (primaryTrait, emotionalStyle, communicationSty
  * Get a fallback first message if AI generation fails
  * @param {string} companionName - Name of the companion
  * @param {string} personality - Personality type
- * @param {Object} companion - Full companion object with interests
+ * @param {Object} companion - Full companion object
  * @returns {string} Fallback message
  */
 const getFallbackFirstMessage = (companionName, personality, companion = null) => {
-  // Try to use companion's actual interests if available
-  if (companion && companion.interests && companion.interests.length > 0) {
-    const firstInterest = companion.interests[0].toLowerCase();
-
-    if (firstInterest.includes('restaurant') || firstInterest.includes('food')) {
-      return "Hey! 😊 I love trying new restaurants too! What's the best meal you've had recently?";
-    } else if (firstInterest.includes('hiking') || firstInterest.includes('nature')) {
-      return "Hi there! I noticed we both love the outdoors. What's your favorite hiking spot?";
-    } else if (firstInterest.includes('adventure')) {
-      return "Hey! I'm always up for spontaneous adventures too! What's the most exciting thing you've done lately?";
-    } else if (firstInterest.includes('yoga') || firstInterest.includes('meditation')) {
-      return "Hi! I love that you're into mindfulness. What's your favorite way to find peace?";
-    } else if (firstInterest.includes('reading') || firstInterest.includes('book')) {
-      return "Hey! A fellow book lover! What's the last book that completely captivated you?";
-    }
-  }
-
-  // Fallback to personality-based messages
+  // Use personality-based messages only
   const fallbacks = {
     'Playful and Flirty': "Hey there! 😏 I couldn't resist saying hi. What's the most interesting thing about you that I should know?",
     'Shy and Loyal': "Hi... I'm a little nervous but I wanted to reach out. You seem really nice! What's something that makes you happy?",

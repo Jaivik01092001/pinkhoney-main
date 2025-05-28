@@ -86,8 +86,16 @@ const getAIResponseHandler = async (req, res) => {
 
     // Process conversation memory after saving messages (async, don't wait)
     if (user_id && name) {
+      console.log(`[AI_CONTROLLER] Triggering memory processing for user ${user_id} and companion ${name}`);
       memoryService.processMemoryAfterConversation(user_id, name)
-        .catch(error => console.error("Memory processing error:", error));
+        .then(() => {
+          console.log(`[AI_CONTROLLER] Memory processing completed for user ${user_id} and companion ${name}`);
+        })
+        .catch(error => {
+          console.error(`[AI_CONTROLLER] Memory processing error for user ${user_id} and companion ${name}:`, error);
+        });
+    } else {
+      console.log(`[AI_CONTROLLER] Skipping memory processing - missing user_id (${user_id}) or name (${name})`);
     }
 
     // Return response
@@ -229,9 +237,72 @@ const saveMatchHandler = async (req, res) => {
   }
 };
 
+/**
+ * Debug endpoint to check memory status
+ */
+const getMemoryDebugHandler = async (req, res) => {
+  try {
+    const { user_id, companion_name } = req.query;
+
+    if (!user_id || !companion_name) {
+      return res.status(400).json({
+        success: false,
+        error: "user_id and companion_name are required"
+      });
+    }
+
+    const memoryInfo = await memoryService.getMemoryDebugInfo(user_id, companion_name);
+
+    res.status(200).json({
+      success: true,
+      memoryInfo
+    });
+  } catch (error) {
+    console.error("Error in getMemoryDebugHandler:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get memory debug info",
+      details: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Debug endpoint to force memory processing
+ */
+const forceMemoryProcessingHandler = async (req, res) => {
+  try {
+    const { user_id, companion_name } = req.body;
+
+    if (!user_id || !companion_name) {
+      return res.status(400).json({
+        success: false,
+        error: "user_id and companion_name are required"
+      });
+    }
+
+    const result = await memoryService.forceMemoryProcessing(user_id, companion_name);
+
+    res.status(200).json({
+      success: result.success,
+      message: result.message,
+      error: result.error
+    });
+  } catch (error) {
+    console.error("Error in forceMemoryProcessingHandler:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to force memory processing",
+      details: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   getAIResponseHandler,
   getChatHistoryHandler,
   getUserChatSummariesHandler,
   saveMatchHandler,
+  getMemoryDebugHandler,
+  forceMemoryProcessingHandler,
 };
