@@ -121,7 +121,17 @@ const saveChatMessage = async (userId, name, personality, image, message, option
         },
         unreadCount: 0,
         isFirstConversation: true,
-        firstMessageGenerated: false
+        firstMessageGenerated: false,
+        followUpTracking: {
+          hasFollowUpSchedule: false,
+          lastFollowUpReset: new Date(),
+          followUpCycle: 1,
+          conversationMetrics: {
+            userMessageCount: 0,
+            botMessageCount: 0,
+            bothParticipated: false
+          }
+        }
       });
     }
 
@@ -144,14 +154,28 @@ const saveChatMessage = async (userId, name, personality, image, message, option
       timestamp: message.timestamp || new Date()
     };
 
-    // Handle unread count
+    // Handle unread count and follow-up tracking
     if (message.sender === 'bot') {
       chatHistory.unreadCount += 1;
+
+      // Update follow-up tracking for bot messages
+      chatHistory.followUpTracking.conversationMetrics.botMessageCount += 1;
+      chatHistory.followUpTracking.conversationMetrics.lastBotActivity = new Date();
     } else if (message.sender === 'user') {
       // User sent a message, reset unread count
       chatHistory.unreadCount = 0;
       // Mark as no longer first conversation
       chatHistory.isFirstConversation = false;
+
+      // Update follow-up tracking for user messages
+      chatHistory.followUpTracking.conversationMetrics.userMessageCount += 1;
+      chatHistory.followUpTracking.conversationMetrics.lastUserActivity = new Date();
+    }
+
+    // Check if both have participated
+    if (chatHistory.followUpTracking.conversationMetrics.userMessageCount > 0 &&
+      chatHistory.followUpTracking.conversationMetrics.botMessageCount > 0) {
+      chatHistory.followUpTracking.conversationMetrics.bothParticipated = true;
     }
 
     // Handle first message generation flag
@@ -160,6 +184,34 @@ const saveChatMessage = async (userId, name, personality, image, message, option
     }
 
     await chatHistory.save();
+
+    // Handle follow-up timer management
+    if (!options.skipFollowUpUpdate) {
+      try {
+        const followUpService = require("./followUpService");
+
+        if (message.sender === 'user') {
+          // Reset follow-up timers when user sends a message
+          await followUpService.resetFollowUpTimers(userId, name, true);
+          chatHistory.followUpTracking.hasFollowUpSchedule = true;
+          chatHistory.followUpTracking.lastFollowUpReset = new Date();
+        } else if (message.sender === 'bot' && !chatHistory.followUpTracking.hasFollowUpSchedule) {
+          // Create initial follow-up schedule when bot sends first message
+          await followUpService.createFollowUpSchedule(userId, name);
+          chatHistory.followUpTracking.hasFollowUpSchedule = true;
+        } else if (message.sender === 'bot') {
+          // Update conversation state for bot messages
+          await followUpService.resetFollowUpTimers(userId, name, false);
+        }
+
+        // Save updated follow-up tracking
+        await chatHistory.save();
+      } catch (followUpError) {
+        console.error("Error updating follow-up timers:", followUpError);
+        // Don't throw error - message saving should succeed even if follow-up fails
+      }
+    }
+
     console.log(
       `Chat message saved for user ${userId} with companion ${name}. Message: ${message.text.substring(
         0,
@@ -387,8 +439,8 @@ const getUserChatThreads = async (userId) => {
     const chatThreads = await ChatHistory.find({
       user_id: userId
     })
-    .select('companion lastMessage unreadCount lastUpdated isFirstConversation firstMessageGenerated')
-    .sort({ lastUpdated: -1 }); // Sort by most recent activity
+      .select('companion lastMessage unreadCount lastUpdated isFirstConversation firstMessageGenerated')
+      .sort({ lastUpdated: -1 }); // Sort by most recent activity
 
     // Transform data for frontend
     const transformedThreads = chatThreads.map(thread => ({

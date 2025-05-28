@@ -12,6 +12,7 @@ const { router: stripeRoutes } = require("./routes/stripeRoutes");
 const clerkRoutes = require("./routes/clerkRoutes");
 const companionRoutes = require("./routes/companionRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const followUpRoutes = require("./routes/followUpRoutes");
 
 // Connect to MongoDB
 connectDB().then(async () => {
@@ -311,6 +312,7 @@ app.use("/api", stripeRoutes);
 app.use("/api", clerkRoutes);
 app.use("/api", companionRoutes);
 app.use("/api", messageRoutes);
+app.use("/api/follow-up", followUpRoutes);
 
 // Health check endpoint
 app.get("/health", (_, res) => {
@@ -322,9 +324,20 @@ app.use(errorHandler);
 
 
 
+// Initialize follow-up service
+const followUpService = require("./services/followUpService");
+
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Initialize follow-up service after server starts
+  try {
+    await followUpService.initialize();
+    console.log("Follow-up service initialized successfully");
+  } catch (error) {
+    console.error("Failed to initialize follow-up service:", error);
+  }
 });
 
 // Handle unhandled promise rejections

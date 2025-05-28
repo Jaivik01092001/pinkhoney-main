@@ -130,7 +130,23 @@ const ChatHistorySchema = new Schema({
 
   // Memory processing flags
   needsMemoryUpdate: { type: Boolean, default: false },
-  lastMemoryProcessed: { type: Date, default: Date.now }
+  lastMemoryProcessed: { type: Date, default: Date.now },
+
+  // Follow-up timing tracking
+  followUpTracking: {
+    hasFollowUpSchedule: { type: Boolean, default: false },
+    lastFollowUpReset: { type: Date, default: Date.now },
+    followUpCycle: { type: Number, default: 1 },
+
+    // Quick access to conversation state for follow-up logic
+    conversationMetrics: {
+      userMessageCount: { type: Number, default: 0 },
+      botMessageCount: { type: Number, default: 0 },
+      lastUserActivity: Date,
+      lastBotActivity: Date,
+      bothParticipated: { type: Boolean, default: false }
+    }
+  }
 }, {
   timestamps: true
 });

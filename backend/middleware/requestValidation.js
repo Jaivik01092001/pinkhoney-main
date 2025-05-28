@@ -101,8 +101,32 @@ const stripeSchemas = {
     price: Joi.number().min(0.01).optional(),
     product_name: Joi.string().optional(),
   }).unknown(true),
+};
 
+// Follow-up related validation schemas
+const followUpSchemas = {
+  createSchedule: Joi.object({
+    user_id: Joi.string().required(),
+    companion_name: Joi.string().required(),
+    reset_existing: Joi.boolean().optional(),
+  }),
 
+  resetTimers: Joi.object({
+    user_id: Joi.string().required(),
+    companion_name: Joi.string().required(),
+    is_user_message: Joi.boolean().optional(),
+  }),
+
+  triggerAction: Joi.object({
+    user_id: Joi.string().required(),
+    companion_name: Joi.string().required(),
+    action_type: Joi.string().valid('12h_reflection', '24h_message', '36h_reflection', '48h_message').required(),
+  }),
+
+  getStatus: Joi.object({
+    user_id: Joi.string().required(),
+    companion_name: Joi.string().required(),
+  }),
 };
 
 // Export validation middleware functions
@@ -118,4 +142,10 @@ module.exports = {
   validateEndCall: validate(voiceSchemas.endCall),
 
   validateCheckoutSession: validate(stripeSchemas.createCheckoutSession, "body"),
+
+  // Follow-up validation
+  validateFollowUpCreate: validate(followUpSchemas.createSchedule),
+  validateFollowUpReset: validate(followUpSchemas.resetTimers),
+  validateFollowUpTrigger: validate(followUpSchemas.triggerAction),
+  validateFollowUpStatus: validate(followUpSchemas.getStatus, "query"),
 };
